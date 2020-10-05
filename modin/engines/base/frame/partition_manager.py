@@ -456,9 +456,22 @@ class BaseFrameManager(object):
         -------
             A NumPy array
         """
-        return np.block(
-            [[block.to_numpy(**kwargs) for block in row] for row in partitions]
-        )
+        from . import BaseFramePartition
+
+        if any(
+            issubclass(type(part), BaseFramePartition)
+            for row in partitions
+            for part in row
+        ):
+            return np.block(
+                [[block.to_numpy(**kwargs) for block in row] for row in partitions]
+            )
+        else:
+            return (
+                np.block([[row_part.to_numpy(**kwargs)] for row_part in partitions])
+                if partitions[0].axis
+                else np.block([col_part.to_numpy(**kwargs) for col_part in partitions])
+            )
 
     @classmethod
     def from_pandas(cls, df, return_dims=False):

@@ -11,10 +11,11 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+import numpy as np
 import pandas
 from modin.data_management.utils import split_result_of_axis_func_pandas
 
-NOT_IMPLMENTED_MESSAGE = "Must be implemented in child class"
+NOT_IMPLEMENTED_MESSAGE = "Must be implemented in child class"
 
 
 class BaseFrameAxisPartition(object):  # pragma: no cover
@@ -72,7 +73,7 @@ class BaseFrameAxisPartition(object):  # pragma: no cover
         Returns:
             A list of `BaseFramePartition` objects.
         """
-        raise NotImplementedError(NOT_IMPLMENTED_MESSAGE)
+        raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
     def shuffle(self, func, lengths, **kwargs):
         """Shuffle the order of the data in this axis based on the `lengths`.
@@ -84,7 +85,22 @@ class BaseFrameAxisPartition(object):  # pragma: no cover
         Returns:
             A list of RemotePartition objects split by `lengths`.
         """
-        raise NotImplementedError(NOT_IMPLMENTED_MESSAGE)
+        raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
+
+    def to_numpy(self, **kwargs):
+        """
+        Convert the object stored in this partition to a NumPy array.
+
+        Returns
+        -------
+            A NumPy array.
+
+        Notes
+        -----
+        If the underlying object is a Pandas DataFrame,
+        this will return a 2D NumPy array.
+        """
+        raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
     # Child classes must have these in order to correctly subclass.
     instance_type = None
@@ -238,7 +254,8 @@ class PandasFrameAxisPartition(BaseFrameAxisPartition):
                 lengths = [len(part.columns) for part in partitions]
                 if sum(lengths) != len(result.columns):
                     lengths = None
-        return split_result_of_axis_func_pandas(axis, num_splits, result, lengths)
+        result = split_result_of_axis_func_pandas(axis, num_splits, result, lengths)
+        return result
 
     @classmethod
     def deploy_func_between_two_axis_partitions(
@@ -280,3 +297,21 @@ class PandasFrameAxisPartition(BaseFrameAxisPartition):
 
         result = func(lt_frame, rt_frame, **kwargs)
         return split_result_of_axis_func_pandas(axis, num_splits, result)
+
+    def to_numpy(self, **kwargs):
+        """
+        Convert the object stored in this partition to a NumPy array.
+
+        Returns
+        -------
+            A NumPy array.
+
+        Notes
+        -----
+        If the underlying object is a Pandas DataFrame,
+        this will return a 2D NumPy array.
+        """
+        return np.concatenate(
+            tuple(part.to_numpy(**kwargs) for part in self.apply(lambda df: df)),
+            axis=self.axis,
+        )
