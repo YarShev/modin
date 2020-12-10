@@ -22,8 +22,20 @@ import ray
 class PandasOnRayFrameAxisPartition(PandasFrameAxisPartition):
     def __init__(self, list_of_blocks):
         # Unwrap from BaseFramePartition object for ease of use
-        for obj in list_of_blocks:
-            obj.drain_call_queue()
+        if len(list_of_blocks) > 1:
+            for i in range(1, len(list_of_blocks), 2):
+                list_of_blocks[i - 1].drain_call_queue()
+                list_of_blocks[i].drain_call_queue()
+                list_of_blocks[i - 1].apply(
+                    lambda left, right=None: pandas.concat(
+                        [left, right], axis=self.axis ^ 1
+                    ),
+                    right=list_of_blocks[i].oid,
+                )
+            if len(list_of_blocks) // 2 != 0:
+                list_of_blocks[len(list_of_blocks) - 1].drain_call_queue()
+        else:
+            list_of_blocks[0].drain_call_queue()
         self.list_of_blocks = [obj.oid for obj in list_of_blocks]
 
     partition_type = PandasOnRayFramePartition
@@ -49,12 +61,21 @@ class PandasOnRayFrameAxisPartition(PandasFrameAxisPartition):
 
     @classmethod
     def deploy_func_between_two_axis_partitions(
-        cls, axis, func, num_splits, len_of_left, other_shape, kwargs, *partitions
+        cls,
+        self_axis,
+        other_axis,
+        func,
+        num_splits,
+        len_of_left,
+        other_shape,
+        kwargs,
+        *partitions
     ):
         return deploy_ray_func._remote(
             args=(
                 PandasFrameAxisPartition.deploy_func_between_two_axis_partitions,
-                axis,
+                self_axis,
+                other_axis,
                 func,
                 num_splits,
                 len_of_left,

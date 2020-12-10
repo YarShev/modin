@@ -301,6 +301,107 @@ class BaseFrameManager(ABC):
         return result_blocks.T if not axis else result_blocks
 
     @classmethod
+    def map_axis_partitions_to_another(
+        cls,
+        axis,
+        apply_func,
+        left,
+        right,
+        keep_partitioning=False,
+    ):
+        # Since we are already splitting the DataFrame back up after an
+        # operation, we will just use this time to compute the number of
+        # partitions as best we can right now.
+        if keep_partitioning:
+            num_splits = len(left) if axis == 0 else len(left.T)
+        else:
+            num_splits = cls._compute_num_partitions()
+        preprocessed_map_func = cls.preprocess_func(apply_func)
+        left_partitions = cls.axis_partition(left, axis)
+        right_partitions = cls.axis_partition(right, axis ^ 1)
+
+        # if combine_axis_partitions:
+        #     if len(left_partitions) > 1:
+        #         is_even = True if len(left_partitions) % 2 == 0 else False
+        #         new_left_partitions = [
+        #             left_partitions[i - 1].apply(
+        #                 lambda left, right: pandas.concat(
+        #                     [left, right], axis=0 if self_axis == 1 else 1
+        #                 ),
+        #                 num_splits=cls._compute_num_partitions(),
+        #                 other_axis_partition=left_partitions[i],
+        #             )
+        #             for i in range(1, len(left_partitions) + 1, 2)
+        #             if i != len(left_partitions)
+        #         ]
+        #         if not is_even:
+        #             new_left_partitions.append(
+        #                 left_partitions[len(left_partitions) - 1].apply(
+        #                     lambda df: df,
+        #                     num_splits=cls._compute_num_partitions(),
+        #                 )
+        #             )
+        #         left_partitions = cls.axis_partition(
+        #             np.array(new_left_partitions), self_axis
+        #         )
+
+        #     if len(right_partitions) > 1:
+        #         is_even = True if len(right_partitions) % 2 == 0 else False
+        #         new_right_partitions = [
+        #             right_partitions[i - 1].apply(
+        #                 lambda left, right: pandas.concat(
+        #                     [left, right], axis=0 if other_axis == 1 else 1
+        #                 ),
+        #                 num_splits=cls._compute_num_partitions(),
+        #                 other_axis_partition=right_partitions[i],
+        #             )
+        #             for i in range(1, len(right_partitions) + 1, 2)
+        #             if i != len(right_partitions)
+        #         ]
+        #         if not is_even:
+        #             new_right_partitions.append(
+        #                 right_partitions[len(right_partitions) - 1].apply(
+        #                     lambda df: df,
+        #                     num_splits=cls._compute_num_partitions(),
+        #                 )
+        #             )
+        #         right_partitions = cls.axis_partition(
+        #             np.array(new_right_partitions).T, other_axis
+        #         )
+
+        # For mapping across the entire axis, we don't maintain partitioning because we
+        # may want to line to partitioning up with another BlockPartitions object. Since
+        # we don't need to maintain the partitioning, this gives us the opportunity to
+        # load-balance the data as well.
+        ################################################
+        # result_blocks = []
+        # for l_part in left_partitions:
+        #     for r_part in right_partitions:
+        #         result_blocks.append(
+        #             l_part.apply(
+        #                 preprocessed_map_func,
+        #                 num_splits=cls._compute_num_partitions(),
+        #                 other_axis_partition=r_part,
+        #             )
+        #         )
+        ################################################
+        result_blocks = []
+        for l_part in left_partitions:
+            row_blocks = []
+            for r_part in right_partitions:
+                row_blocks += l_part.apply(
+                    preprocessed_map_func,
+                    num_splits=1,
+                    other_axis_partition=r_part,
+                )
+            result_blocks.append(row_blocks)
+        result_blocks = np.array(result_blocks)
+        # If we are mapping over columns, they are returned to use the same as
+        # rows, so we need to transpose the returned 2D NumPy array to return
+        # the structure to the correct order.
+        return result_blocks.T if not axis else result_blocks
+
+    @classmethod
     def map_partitions(cls, partitions, map_func):
         """Apply `map_func` to every partition.
 

@@ -157,6 +157,7 @@ class PandasFrameAxisPartition(BaseFrameAxisPartition):
             return self._wrap_partitions(
                 self.deploy_func_between_two_axis_partitions(
                     self.axis,
+                    other_axis_partition[0].axis,
                     func,
                     num_splits,
                     len(self.list_of_blocks),
@@ -245,7 +246,15 @@ class PandasFrameAxisPartition(BaseFrameAxisPartition):
 
     @classmethod
     def deploy_func_between_two_axis_partitions(
-        cls, axis, func, num_splits, len_of_left, other_shape, kwargs, *partitions
+        cls,
+        self_axis,
+        other_axis,
+        func,
+        num_splits,
+        len_of_left,
+        other_shape,
+        kwargs,
+        *partitions,
     ):
         """Deploy a function along a full axis between two data sets in Ray.
 
@@ -266,7 +275,7 @@ class PandasFrameAxisPartition(BaseFrameAxisPartition):
         -------
             A list of Pandas DataFrames.
         """
-        lt_frame = pandas.concat(partitions[:len_of_left], axis=axis, copy=False)
+        lt_frame = pandas.concat(partitions[:len_of_left], axis=self_axis, copy=False)
 
         rt_parts = partitions[len_of_left:]
 
@@ -274,12 +283,12 @@ class PandasFrameAxisPartition(BaseFrameAxisPartition):
         combined_axis = [
             pandas.concat(
                 rt_parts[other_shape[i - 1] : other_shape[i]],
-                axis=axis,
+                axis=other_axis,
                 copy=False,
             )
             for i in range(1, len(other_shape))
         ]
-        rt_frame = pandas.concat(combined_axis, axis=axis ^ 1, copy=False)
+        rt_frame = pandas.concat(combined_axis, axis=other_axis ^ 1, copy=False)
 
         result = func(lt_frame, rt_frame, **kwargs)
-        return split_result_of_axis_func_pandas(axis, num_splits, result)
+        return split_result_of_axis_func_pandas(self_axis, num_splits, result)

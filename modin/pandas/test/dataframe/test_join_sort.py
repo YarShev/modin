@@ -193,10 +193,10 @@ def test_merge(test_data, test_data2):
         index=pandas.Index([i for i in range(1, test_data2.shape[0] + 1)], name="key"),
     )
 
-    hows = ["left", "inner"]
+    hows = ["inner"]
     ons = ["col33", ["col33", "col34"]]
     sorts = [False, True]
-    for i in range(2):
+    for i in range(1):
         for j in range(2):
             modin_result = modin_df.merge(
                 modin_df2, how=hows[i], on=ons[j], sort=sorts[j]

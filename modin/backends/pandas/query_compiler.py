@@ -452,15 +452,15 @@ class PandasQueryCompiler(BaseQueryCompiler):
         sort = kwargs.get("sort", False)
 
         if how in ["left", "inner"] and left_index is False and right_index is False:
-            right = right.to_pandas()
-
             kwargs["sort"] = False
 
-            def map_func(left, right=right, kwargs=kwargs):
+            def map_func(left, right, kwargs=kwargs):
                 return pandas.merge(left, right, **kwargs)
 
             new_self = self.__constructor__(
-                self._modin_frame._apply_full_axis(1, map_func)
+                self._modin_frame._apply_full_axis_to_another(
+                    1, map_func, right._modin_frame
+                )
             )
             is_reset_index = True
             if left_on and right_on:
@@ -1657,17 +1657,16 @@ class PandasQueryCompiler(BaseQueryCompiler):
         PandasQueryCompiler
             The covariance or correlation matrix of the series of the DataFrame.
         """
-        other = self.to_numpy()
-        other_mask = self._isfinite().to_numpy()
-        n_cols = other.shape[1]
-
         if min_periods is None:
             min_periods = 1
 
-        def map_func(df):
+        def map_func(df, other):
             df = df.to_numpy()
-            n_rows = df.shape[0]
+            other = other.to_numpy()
             df_mask = np.isfinite(df)
+            other_mask = np.isfinite(other)
+            n_rows = df.shape[0]
+            n_cols = other.shape[1]
 
             result = np.empty((n_rows, n_cols), dtype=np.float64)
 
@@ -1705,8 +1704,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
         columns = self.columns
         index = columns.copy()
         transponed_self = self.transpose()
-        new_modin_frame = transponed_self._modin_frame._apply_full_axis(
-            1, map_func, new_index=index, new_columns=columns
+        new_modin_frame = transponed_self._modin_frame._apply_full_axis_to_another(
+            1, map_func, self._modin_frame, new_index=index, new_columns=columns
         )
         return transponed_self.__constructor__(new_modin_frame)
 
@@ -1729,20 +1728,34 @@ class PandasQueryCompiler(BaseQueryCompiler):
             A new query compiler that contains result of the matrix multiply.
         """
         if isinstance(other, PandasQueryCompiler):
-            other = (
-                other.to_pandas().squeeze(axis=1)
-                if squeeze_other
-                else other.to_pandas()
-            )
 
-        def map_func(df, other=other, squeeze_self=squeeze_self):
-            result = df.squeeze(axis=1).dot(other) if squeeze_self else df.dot(other)
-            if is_list_like(result):
-                return pandas.DataFrame(result)
-            else:
-                return pandas.DataFrame([result])
+            def map_func(
+                df, other, squeeze_self=squeeze_self, squeeze_other=squeeze_other
+            ):
+                if squeeze_self:
+                    df = df.squeeze(axis=1)
+                if squeeze_other:
+                    other = other.squeeze(axis=1)
+                result = df.dot(other)
+                if is_list_like(result):
+                    return pandas.DataFrame(result)
+                else:
+                    return pandas.DataFrame([result])
 
-        num_cols = other.shape[1] if len(other.shape) > 1 else 1
+            num_cols = len(other.columns) if len(other.columns) > 1 else 1
+        else:
+
+            def map_func(df, other=other, squeeze_self=squeeze_self):
+                result = (
+                    df.squeeze(axis=1).dot(other) if squeeze_self else df.dot(other)
+                )
+                if is_list_like(result):
+                    return pandas.DataFrame(result)
+                else:
+                    return pandas.DataFrame([result])
+
+            num_cols = other.shape[1] if len(other.shape) > 1 else 1
+
         if len(self.columns) == 1:
             new_index = (
                 ["__reduced__"]
@@ -1756,9 +1769,21 @@ class PandasQueryCompiler(BaseQueryCompiler):
             new_columns = ["__reduced__"] if num_cols == 1 else None
             axis = 1
 
-        new_modin_frame = self._modin_frame._apply_full_axis(
-            axis, map_func, new_index=new_index, new_columns=new_columns
-        )
+        if isinstance(other, PandasQueryCompiler):
+            new_modin_frame = self._modin_frame._apply_full_axis_to_another(
+                axis,
+                map_func,
+                other._modin_frame,
+                new_index=new_index,
+                new_columns=new_columns,
+            )
+        else:
+            new_modin_frame = self._modin_frame._apply_full_axis(
+                axis,
+                map_func,
+                new_index=new_index,
+                new_columns=new_columns,
+            )
         return self.__constructor__(new_modin_frame)
 
     def _nsort(self, n, columns=None, keep="first", sort_type="nsmallest"):

@@ -30,8 +30,26 @@ data_cache = dict()
 dataframes_cache = dict()
 
 
-def gen_int_data(ncols, nrows, rand_low, rand_high):
-    cache_key = ("int", ncols, nrows, rand_low, rand_high)
+def gen_float_data(nrows, ncols, rand_low, rand_high):
+    cache_key = ("float", nrows, ncols, rand_low, rand_high)
+    if cache_key in data_cache:
+        return data_cache[cache_key]
+
+    logging.info(
+        "Generating float data {} rows and {} columns [{}-{}]".format(
+            nrows, ncols, rand_low, rand_high
+        )
+    )
+    data = {
+        "col{}".format(i): random_state.uniform(rand_low, rand_high, size=(nrows))
+        for i in range(ncols)
+    }
+    data_cache[cache_key] = weakdict(data)
+    return data
+
+
+def gen_int_data(nrows, ncols, rand_low, rand_high):
+    cache_key = ("int", nrows, ncols, rand_low, rand_high)
     if cache_key in data_cache:
         return data_cache[cache_key]
 
@@ -48,8 +66,8 @@ def gen_int_data(ncols, nrows, rand_low, rand_high):
     return data
 
 
-def gen_str_int_data(ncols, nrows, rand_low, rand_high):
-    cache_key = ("str_int", ncols, nrows, rand_low, rand_high)
+def gen_str_int_data(nrows, ncols, rand_low, rand_high):
+    cache_key = ("str_int", nrows, ncols, rand_low, rand_high)
     if cache_key in data_cache:
         return data_cache[cache_key]
 
@@ -58,7 +76,7 @@ def gen_str_int_data(ncols, nrows, rand_low, rand_high):
             nrows, ncols, rand_low, rand_high
         )
     )
-    data = gen_int_data(ncols, nrows, rand_low, rand_high).copy()
+    data = gen_int_data(nrows, ncols, rand_low, rand_high).copy()
     data["gb_col"] = [
         "str_{}".format(random_state.randint(rand_low, rand_high)) for i in range(nrows)
     ]
@@ -66,17 +84,19 @@ def gen_str_int_data(ncols, nrows, rand_low, rand_high):
     return data
 
 
-def gen_data(data_type, ncols, nrows, rand_low, rand_high):
-    if data_type == "int":
-        return gen_int_data(ncols, nrows, rand_low, rand_high)
+def gen_data(data_type, nrows, ncols, rand_low, rand_high):
+    if data_type == "float":
+        return gen_float_data(nrows, ncols, rand_low, rand_high)
+    elif data_type == "int":
+        return gen_int_data(nrows, ncols, rand_low, rand_high)
     elif data_type == "str_int":
-        return gen_str_int_data(ncols, nrows, rand_low, rand_high)
+        return gen_str_int_data(nrows, ncols, rand_low, rand_high)
     else:
         assert False
 
 
-def generate_dataframe(impl, data_type, ncols, nrows, rand_low, rand_high):
-    cache_key = (impl, data_type, ncols, nrows, rand_low, rand_high)
+def generate_dataframe(impl, data_type, nrows, ncols, rand_low, rand_high):
+    cache_key = (impl, data_type, nrows, ncols, rand_low, rand_high)
     if cache_key in dataframes_cache:
         return dataframes_cache[cache_key]
 
@@ -85,7 +105,7 @@ def generate_dataframe(impl, data_type, ncols, nrows, rand_low, rand_high):
             impl, data_type, nrows, ncols, rand_low, rand_high
         )
     )
-    data = gen_data(data_type, ncols, nrows, rand_low, rand_high)
+    data = gen_data(data_type, nrows, ncols, rand_low, rand_high)
     if impl == "modin":
         df = pd.DataFrame(data)
     elif impl == "pandas":

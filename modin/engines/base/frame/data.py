@@ -1755,6 +1755,44 @@ class BasePandasFrame(object):
             else False,
         )
 
+    def _apply_full_axis_to_another(
+        self,
+        axis,
+        func,
+        other,
+        new_index=None,
+        new_columns=None,
+        dtypes=None,
+    ):
+        new_partitions = self._frame_mgr_cls.map_axis_partitions_to_another(
+            axis=axis,
+            left=self._partitions,
+            right=other._partitions,
+            apply_func=self._build_mapreduce_func(axis, func),
+            keep_partitioning=True,
+        )
+        # Index objects for new object creation. This is shorter than if..else
+        new_axes = [
+            self._compute_axis_labels(i, new_partitions)
+            if new_axis is None
+            else new_axis
+            for i, new_axis in enumerate([new_index, new_columns])
+        ]
+        if dtypes == "copy":
+            dtypes = self._dtypes
+        elif dtypes is not None:
+            dtypes = pandas.Series(
+                [np.dtype(dtypes)] * len(new_axes[1]), index=new_axes[1]
+            )
+        return self.__constructor__(
+            new_partitions,
+            *new_axes,
+            None,
+            None,
+            dtypes,
+            validate_axes="all" if new_partitions.size != 0 else False,
+        )
+
     def _copartition(self, axis, other, how, sort, force_repartition=False):
         """
         Copartition two dataframes.
