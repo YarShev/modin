@@ -48,10 +48,8 @@ def unwrap_partitions(api_layer_object, axis=None, bind_ip=False):
             f"Only API Layer objects may be passed in here, got {type(api_layer_object)} instead."
         )
 
-    if bind_ip and EnablePartitionIPs.get() is False:
-        ValueError(
-            "Passed `bind_ip=True` but `MODIN_ENABLE_PARTITIONS_API` env var was not exported."
-        )
+    if bind_ip and not EnablePartitionIPs.get():
+        raise ValueError("Passed `bind_ip=True` but partition IPs API was not enabled.")
 
     if axis is None:
 
@@ -96,9 +94,9 @@ def create_df_from_partitions(partitions, axis):
     Parameters
     ----------
     partitions : list
-        List of Ray.ObjectRef/Dask.Future referencing to partitions in depend of the engine used.
-        Or list containing tuples of Ray.ObjectRef/Dask.Future referencing to ip addresses of partitions
-        and partitions itself in depend of the engine used.
+        List of Ray.ObjectRef/Dask.Future referencing partitions depending on the engine used.
+        Or list of tuples of Ray.ObjectRef/Dask.Future referencing ip addresses of partitions
+        and partitions themselves depending on the engine used.
     axis : None, 0 or 1
         The `axis` parameter is used to identify what are the partitions passed.
         You have to set:
@@ -122,9 +120,9 @@ def create_df_from_partitions(partitions, axis):
     # When collecting partitions to NumPy array they will be kept row-wise
     if axis is None:
         if isinstance(partitions[0][0], tuple):
-            if EnablePartitionIPs.get() is False:
+            if not EnablePartitionIPs.get():
                 raise ValueError(
-                    "Passed `partitions` with IPs but `MODIN_ENABLE_PARTITIONS_API` env var was not exported."
+                    "Passed `partitions` with IPs but partition IPs API was not enabled."
                 )
             parts = np.array(
                 [
@@ -142,9 +140,9 @@ def create_df_from_partitions(partitions, axis):
     # When collecting partitions to NumPy array they will be kept row-wise
     elif axis == 0:
         if isinstance(partitions[0], tuple):
-            if EnablePartitionIPs.get() is False:
+            if not EnablePartitionIPs.get():
                 raise ValueError(
-                    "Passed `partitions` with IPs but `MODIN_ENABLE_PARTITIONS_API` env var was not exported."
+                    "Passed `partitions` with IPs but partition IPs API was not enabled."
                 )
             parts = np.array(
                 [[partition_class(partition, ip=ip)] for ip, partition in partitions]
@@ -154,9 +152,9 @@ def create_df_from_partitions(partitions, axis):
     # When collecting partitions to NumPy array they will be kept column-wise
     elif axis == 1:
         if isinstance(partitions[0], tuple):
-            if EnablePartitionIPs.get() is False:
+            if not EnablePartitionIPs.get():
                 raise ValueError(
-                    "Passed `partitions` with IPs but `MODIN_ENABLE_PARTITIONS_API` env var was not exported."
+                    "Passed `partitions` with IPs but partition IPs API was not enabled."
                 )
             parts = np.array(
                 [[partition_class(partition, ip=ip) for ip, partition in partitions]]
