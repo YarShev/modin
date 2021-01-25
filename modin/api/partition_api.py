@@ -11,6 +11,12 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+import numpy as np
+
+from modin.backends.pandas.query_compiler import PandasQueryCompiler
+from modin.config import EnablePartitionIPs
+from modin.pandas.dataframe import DataFrame
+
 
 def unwrap_partitions(api_layer_object, axis=None, bind_ip=False):
     """
@@ -42,20 +48,23 @@ def unwrap_partitions(api_layer_object, axis=None, bind_ip=False):
             f"Only API Layer objects may be passed in here, got {type(api_layer_object)} instead."
         )
 
+    if bind_ip and EnablePartitionIPs.get() is False:
+        ValueError(
+            "Passed `bind_ip=True` but `MODIN_ENABLE_PARTITIONS_API` env var was not exported."
+        )
+
     if axis is None:
 
         def _unwrap_partitions(oid):
             if bind_ip:
                 return [
-                    (partition.ip, getattr(partition, oid))
+                    [(partition.ip, getattr(partition, oid)) for partition in row]
                     for row in api_layer_object._query_compiler._modin_frame._partitions
-                    for partition in row
                 ]
             else:
                 return [
-                    getattr(partition, oid)
+                    [getattr(partition, oid) for partition in row]
                     for row in api_layer_object._query_compiler._modin_frame._partitions
-                    for partition in row
                 ]
 
         actual_engine = type(
@@ -78,3 +87,89 @@ def unwrap_partitions(api_layer_object, axis=None, bind_ip=False):
             part.coalesce(bind_ip=bind_ip).unwrap(squeeze=True, bind_ip=bind_ip)
             for part in partitions
         ]
+
+
+def create_df_from_partitions(partitions, axis):
+    """
+    Create DataFrame from remote partitions.
+
+    Parameters
+    ----------
+    partitions : list
+        List of Ray.ObjectRef/Dask.Future referencing to partitions in depend of the engine used.
+        Or list containing tuples of Ray.ObjectRef/Dask.Future referencing to ip addresses of partitions
+        and partitions itself in depend of the engine used.
+    axis : None, 0 or 1
+        The `axis` parameter is used to identify what are the partitions passed.
+        You have to set:
+        - `axis` to 0 if you want to create DataFrame from row partitions.
+        - `axis` to 1 if you want to create DataFrame from column partitions.
+        - `axis` to None if you want to create DataFrame from 2D list of partitions.
+
+    Returns
+    -------
+    DataFrame
+        DataFrame instance created from remote partitions.
+    """
+    from modin.data_management.factories.dispatcher import EngineDispatcher
+
+    factory = EngineDispatcher.get_engine()
+
+    partition_class = factory.io_cls.frame_cls._frame_mgr_cls._partition_class
+    partition_frame_class = factory.io_cls.frame_cls
+    partition_mgr_class = factory.io_cls.frame_cls._frame_mgr_cls
+
+    # When collecting partitions to NumPy array they will be kept row-wise
+    if axis is None:
+        if isinstance(partitions[0][0], tuple):
+            if EnablePartitionIPs.get() is False:
+                raise ValueError(
+                    "Passed `partitions` with IPs but `MODIN_ENABLE_PARTITIONS_API` env var was not exported."
+                )
+            parts = np.array(
+                [
+                    [partition_class(partition, ip=ip) for ip, partition in row]
+                    for row in partitions
+                ]
+            )
+        else:
+            parts = np.array(
+                [
+                    [partition_class(partition) for partition in row]
+                    for row in partitions
+                ]
+            )
+    # When collecting partitions to NumPy array they will be kept row-wise
+    elif axis == 0:
+        if isinstance(partitions[0], tuple):
+            if EnablePartitionIPs.get() is False:
+                raise ValueError(
+                    "Passed `partitions` with IPs but `MODIN_ENABLE_PARTITIONS_API` env var was not exported."
+                )
+            parts = np.array(
+                [[partition_class(partition, ip=ip)] for ip, partition in partitions]
+            )
+        else:
+            parts = np.array([[partition_class(partition)] for partition in partitions])
+    # When collecting partitions to NumPy array they will be kept column-wise
+    elif axis == 1:
+        if isinstance(partitions[0], tuple):
+            if EnablePartitionIPs.get() is False:
+                raise ValueError(
+                    "Passed `partitions` with IPs but `MODIN_ENABLE_PARTITIONS_API` env var was not exported."
+                )
+            parts = np.array(
+                [[partition_class(partition, ip=ip) for ip, partition in partitions]]
+            )
+        else:
+            parts = np.array([[partition_class(partition) for partition in partitions]])
+    else:
+        raise ValueError(
+            f"Got unacceptable value of axis {axis}. Possible values are {0}, {1} or {None}."
+        )
+
+    index = partition_mgr_class.get_indices(0, parts, lambda df: df.axes[0])
+    columns = partition_mgr_class.get_indices(1, parts, lambda df: df.axes[1])
+    return DataFrame(
+        query_compiler=PandasQueryCompiler(partition_frame_class(parts, index, columns))
+    )
