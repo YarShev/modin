@@ -183,7 +183,21 @@ class PandasOnRayFramePartition(BaseFramePartition):
         Returns:
             A `RayRemotePartition` object.
         """
-        return PandasOnRayFramePartition(ray.put(obj), len(obj.index), len(obj.columns))
+        if EnablePartitionIPs.get():
+            oid = ray.put(obj)
+            loc_id = ray.objects(object_ref=oid)["Locations"][0]
+            ip = [
+                node["NodeManagerAddress"]
+                for node in ray.nodes()
+                if node["NodeID"] == loc_id
+            ]
+            return PandasOnRayFramePartition(
+                oid, len(obj.index), len(obj.columns), ip=ip[0]
+            )
+        else:
+            return PandasOnRayFramePartition(
+                ray.put(obj), len(obj.index), len(obj.columns)
+            )
 
     @classmethod
     def preprocess_func(cls, func):

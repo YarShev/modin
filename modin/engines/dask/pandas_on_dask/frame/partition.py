@@ -159,7 +159,12 @@ class PandasOnDaskFramePartition(BaseFramePartition):
             A `RemotePartitions` object.
         """
         client = get_client()
-        return cls(client.scatter(obj, hash=False))
+        if EnablePartitionIPs.get():
+            future = client.scatter(obj, hash=False)
+            ip = client.who_has(futures=future)[future.key][0][6:].split(":")[0]
+            return cls(future, ip=ip)
+        else:
+            return cls(client.scatter(obj, hash=False))
 
     @classmethod
     def preprocess_func(cls, func):

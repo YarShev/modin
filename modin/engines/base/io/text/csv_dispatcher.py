@@ -15,10 +15,11 @@ from modin.engines.base.io.text.text_file_dispatcher import TextFileDispatcher
 from modin.data_management.utils import compute_chunksize
 from pandas.io.parsers import _validate_usecols_arg
 import pandas
+import numpy as np
 import csv
 import sys
 
-from modin.config import NPartitions
+from modin.config import NPartitions, EnablePartitionIPs
 
 
 class CSVDispatcher(TextFileDispatcher):
@@ -169,10 +170,16 @@ class CSVDispatcher(TextFileDispatcher):
             )
             for start, end in splits:
                 args.update({"start": start, "end": end})
-                partition_id = cls.deploy(cls.parse, num_splits + 2, args)
-                partition_ids.append(partition_id[:-2])
-                index_ids.append(partition_id[-2])
-                dtypes_ids.append(partition_id[-1])
+                if EnablePartitionIPs.get():
+                    partition_id = np.array(cls.deploy(cls.parse, num_splits + 2, args))
+                    partition_ids.append(partition_id[:-2])
+                    index_ids.append(partition_id[-2])
+                    dtypes_ids.append(partition_id[-1])
+                else:
+                    partition_id = cls.deploy(cls.parse, num_splits + 2, args)
+                    partition_ids.append(partition_id[:-2])
+                    index_ids.append(partition_id[-2])
+                    dtypes_ids.append(partition_id[-1])
 
         # Compute the index based on a sum of the lengths of each partition (by default)
         # or based on the column(s) that were requested.

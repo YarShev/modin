@@ -11,12 +11,20 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+from modin.config import EnablePartitionIPs
+
 import ray
+from ray.services import get_node_ip_address
 
 
 @ray.remote
 def deploy_ray_func(func, args):  # pragma: no cover
-    return func(**args)
+    if EnablePartitionIPs.get():
+        partitions = func(**args)
+        ips = [get_node_ip_address()] * len(partitions)
+        return list(zip(partitions, ips))
+    else:
+        return func(**args)
 
 
 class RayTask:

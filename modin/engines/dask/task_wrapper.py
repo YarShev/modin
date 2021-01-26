@@ -11,7 +11,11 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+from modin.config import EnablePartitionIPs
+
+import numpy as np
 from distributed.client import _get_global_client
+from distributed.utils import get_ip
 
 
 class DaskTask:
@@ -19,10 +23,26 @@ class DaskTask:
     def deploy(cls, func, num_returns, kwargs):
         client = _get_global_client()
         remote_task_future = client.submit(func, **kwargs)
-        return [
-            client.submit(lambda l, i: l[i], remote_task_future, i)
-            for i in range(num_returns)
-        ]
+        if EnablePartitionIPs.get():
+            futures = [
+                client.submit(lambda l, i: (l[i], get_ip()), remote_task_future, i)
+                for i in range(num_returns)
+            ]
+            futures_with_ips = np.array(
+                [
+                    [
+                        client.submit(lambda l, i, j: l[i][j], futures, i, j)
+                        for j in range(2)
+                    ]
+                    for i in range(num_returns)
+                ]
+            )
+            return list(zip(futures_with_ips[:, 0], futures_with_ips[:, 1]))
+        else:
+            return [
+                client.submit(lambda l, i: l[i], remote_task_future, i)
+                for i in range(num_returns)
+            ]
 
     @classmethod
     def materialize(cls, future):

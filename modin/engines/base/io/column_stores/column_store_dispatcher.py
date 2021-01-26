@@ -16,7 +16,7 @@ import pandas
 
 from modin.data_management.utils import compute_chunksize
 from modin.engines.base.io.file_dispatcher import FileDispatcher
-from modin.config import NPartitions
+from modin.config import NPartitions, EnablePartitionIPs
 
 
 class ColumnStoreDispatcher(FileDispatcher):
@@ -40,19 +40,35 @@ class ColumnStoreDispatcher(FileDispatcher):
 
     @classmethod
     def build_partition(cls, partition_ids, row_lengths, column_widths):
-        return np.array(
-            [
+        if EnablePartitionIPs.get():
+            return np.array(
                 [
-                    cls.frame_partition_cls(
-                        partition_ids[i][j],
-                        length=row_lengths[i],
-                        width=column_widths[j],
-                    )
-                    for j in range(len(partition_ids[i]))
+                    [
+                        cls.frame_partition_cls(
+                            partition_ids[i][j][0],
+                            length=row_lengths[i],
+                            width=column_widths[j],
+                            ip=partition_ids[i][j][1],
+                        )
+                        for j in range(len(partition_ids[i]))
+                    ]
+                    for i in range(len(partition_ids))
                 ]
-                for i in range(len(partition_ids))
-            ]
-        )
+            )
+        else:
+            return np.array(
+                [
+                    [
+                        cls.frame_partition_cls(
+                            partition_ids[i][j],
+                            length=row_lengths[i],
+                            width=column_widths[j],
+                        )
+                        for j in range(len(partition_ids[i]))
+                    ]
+                    for i in range(len(partition_ids))
+                ]
+            )
 
     @classmethod
     def build_index(cls, partition_ids):
@@ -105,17 +121,39 @@ class ColumnStoreDispatcher(FileDispatcher):
     def build_query_compiler(cls, path, columns, **kwargs):
         col_partitions, column_widths = cls.build_columns(columns)
         partition_ids = cls.call_deploy(path, col_partitions, **kwargs)
-        index, row_lens = cls.build_index(partition_ids)
-        remote_parts = cls.build_partition(partition_ids[:-2], row_lens, column_widths)
-        dtypes = cls.build_dtypes(partition_ids[-1], columns)
-        new_query_compiler = cls.query_compiler_cls(
-            cls.frame_cls(
-                remote_parts,
-                index,
-                columns,
-                row_lens,
-                column_widths,
-                dtypes=dtypes,
+        if EnablePartitionIPs.get():
+            partition_ids_without_ips = [
+                [part[0] for part in row] for row in partition_ids
+            ]
+            index, row_lens = cls.build_index(partition_ids_without_ips)
+            remote_parts = cls.build_partition(
+                partition_ids[:-2], row_lens, column_widths
             )
-        )
+            dtypes = cls.build_dtypes(partition_ids_without_ips[-1], columns)
+            new_query_compiler = cls.query_compiler_cls(
+                cls.frame_cls(
+                    remote_parts,
+                    index,
+                    columns,
+                    row_lens,
+                    column_widths,
+                    dtypes=dtypes,
+                )
+            )
+        else:
+            index, row_lens = cls.build_index(partition_ids)
+            remote_parts = cls.build_partition(
+                partition_ids[:-2], row_lens, column_widths
+            )
+            dtypes = cls.build_dtypes(partition_ids[-1], columns)
+            new_query_compiler = cls.query_compiler_cls(
+                cls.frame_cls(
+                    remote_parts,
+                    index,
+                    columns,
+                    row_lens,
+                    column_widths,
+                    dtypes=dtypes,
+                )
+            )
         return new_query_compiler
