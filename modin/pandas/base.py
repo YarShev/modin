@@ -2083,6 +2083,18 @@ class BasePandasDataset(object):
             # Check obvious case first
             return self.copy()
 
+        if fill_value is no_default:
+            nan_values = dict()
+            for name, dtype in dict(self.dtypes).items():
+                if is_numeric_dtype(dtype):
+                    nan_values[name] = np.NaN
+                elif is_datetime_or_timedelta_dtype(dtype):
+                    nan_values[name] = np.datetime64("NaT")
+                else:
+                    nan_values[name] = None
+
+            fill_value = nan_values
+
         empty_frame = False
         if axis == "index" or axis == 0:
             if abs(periods) >= len(self.index):
