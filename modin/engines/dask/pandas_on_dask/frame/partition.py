@@ -16,9 +16,8 @@ import pandas
 from modin.data_management.utils import length_fn_pandas, width_fn_pandas
 from modin.engines.base.frame.partition import BaseFramePartition
 
-from distributed.client import get_client
+from distributed.client import get_client, wait
 from distributed import Future
-from distributed.utils import get_ip
 import cloudpickle as pkl
 
 
@@ -27,7 +26,7 @@ def apply_list_of_funcs(funcs, df):
         if isinstance(func, bytes):
             func = pkl.loads(func)
         df = func(df, **kwargs)
-    return df, get_ip()
+    return df
 
 
 class PandasOnDaskFramePartition(BaseFramePartition):
@@ -84,8 +83,7 @@ class PandasOnDaskFramePartition(BaseFramePartition):
         future = get_client().submit(
             apply_list_of_funcs, call_queue, self.future, pure=False
         )
-        futures = [get_client().submit(lambda l: l[i], future) for i in range(2)]
-        return PandasOnDaskFramePartition(futures[0], ip=futures[1])
+        return PandasOnDaskFramePartition(future)
 
     def add_to_apply_calls(self, func, **kwargs):
         return PandasOnDaskFramePartition(
@@ -95,9 +93,7 @@ class PandasOnDaskFramePartition(BaseFramePartition):
     def drain_call_queue(self):
         if len(self.call_queue) == 0:
             return
-        new_partition = self.apply(lambda x: x)
-        self.future = new_partition.future
-        self._ip_cache = new_partition._ip_cache
+        self.future = self.apply(lambda x: x).future
         self.call_queue = []
 
     def mask(self, row_indices, col_indices):
@@ -210,9 +206,15 @@ class PandasOnDaskFramePartition(BaseFramePartition):
 
     def ip(self):
         if self._ip_cache is None:
-            self._ip_cache = self.apply(lambda df: df)._ip_cache
-        if isinstance(self._ip_cache, Future):
-            self._ip_cache = self._ip_cache.result()
+            if len(self.call_queue):
+                self.drain_call_queue()
+            # Since `wait` returns a named tuple of completed and not completed futures as sets
+            # we need to retrive only completed future via `iter` and `next` from completed set.
+            future = next(iter(wait([self.future]).done))
+            ip = get_client().who_has(future)[future.key][0]
+            # Since dask uses ip addresses like `tcp://<ip>:<port>`
+            # we need to retrieve `ip` part
+            self._ip_cache = ip[6:].split(":")[0]
         return self._ip_cache
 
     @classmethod

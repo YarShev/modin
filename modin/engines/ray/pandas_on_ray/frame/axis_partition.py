@@ -17,7 +17,6 @@ from modin.engines.base.frame.axis_partition import PandasFrameAxisPartition
 from .partition import PandasOnRayFramePartition
 
 import ray
-from ray.services import get_node_ip_address
 
 
 class PandasOnRayFrameAxisPartition(PandasFrameAxisPartition):
@@ -47,7 +46,7 @@ class PandasOnRayFrameAxisPartition(PandasFrameAxisPartition):
                 maintain_partitioning,
             )
             + tuple(partitions),
-            num_returns=num_splits * 4 if lengths is None else len(lengths) * 4,
+            num_returns=num_splits * 3 if lengths is None else len(lengths) * 3,
         )
 
     @classmethod
@@ -65,13 +64,13 @@ class PandasOnRayFrameAxisPartition(PandasFrameAxisPartition):
                 kwargs,
             )
             + tuple(partitions),
-            num_returns=num_splits * 4,
+            num_returns=num_splits * 3,
         )
 
     def _wrap_partitions(self, partitions):
         return [
-            self.partition_type(object_id, length, width, ip)
-            for (object_id, length, width, ip) in zip(*[iter(partitions)] * 4)
+            self.partition_type(object_id, length, width)
+            for (object_id, length, width) in zip(*[iter(partitions)] * 3)
         ]
 
 
@@ -112,10 +111,9 @@ def deploy_ray_func(func, *args):  # pragma: no cover
     Ray functions are not detected by codecov (thus pragma: no cover)
     """
     result = func(*args)
-    ip = get_node_ip_address()
     if isinstance(result, pandas.DataFrame):
-        return result, len(result), len(result.columns), ip
+        return result, len(result), len(result.columns)
     elif all(isinstance(r, pandas.DataFrame) for r in result):
-        return [i for r in result for i in [r, len(r), len(r.columns), ip]]
+        return [i for r in result for i in [r, len(r), len(r.columns)]]
     else:
-        return [i for r in result for i in [r, None, None, ip]]
+        return [i for r in result for i in [r, None, None]]

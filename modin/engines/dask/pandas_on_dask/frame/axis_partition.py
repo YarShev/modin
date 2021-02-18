@@ -16,7 +16,6 @@ from .partition import PandasOnDaskFramePartition
 
 from distributed.client import get_client
 from distributed import Future
-from distributed.utils import get_ip
 import pandas
 
 
@@ -56,7 +55,7 @@ class PandasOnDaskFrameAxisPartition(PandasFrameAxisPartition):
         # get futures for each.
         return [
             client.submit(lambda l: l[i], axis_result, pure=False)
-            for i in range(result_num_splits * 4)
+            for i in range(result_num_splits * 3)
         ]
 
     @classmethod
@@ -80,13 +79,13 @@ class PandasOnDaskFrameAxisPartition(PandasFrameAxisPartition):
         # get futures for each.
         return [
             client.submit(lambda l: l[i], axis_result, pure=False)
-            for i in range(num_splits * 4)
+            for i in range(num_splits * 3)
         ]
 
     def _wrap_partitions(self, partitions):
         return [
-            self.partition_type(future, length, width, ip)
-            for (future, length, width, ip) in zip(*[iter(partitions)] * 4)
+            self.partition_type(future, length, width)
+            for (future, length, width) in zip(*[iter(partitions)] * 3)
         ]
 
 
@@ -122,10 +121,9 @@ def deploy_dask_func(func, *args):
         The result of the function `func`.
     """
     result = func(*args)
-    ip = get_ip()
     if isinstance(result, pandas.DataFrame):
-        return result, len(result), len(result.columns), ip
+        return result, len(result), len(result.columns)
     elif all(isinstance(r, pandas.DataFrame) for r in result):
-        return [i for r in result for i in [r, len(r), len(r.columns), ip]]
+        return [i for r in result for i in [r, len(r), len(r.columns)]]
     else:
-        return [i for r in result for i in [r, None, None, ip]]
+        return [i for r in result for i in [r, None, None]]

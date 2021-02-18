@@ -62,8 +62,8 @@ class PandasOnRayFramePartition(BaseFramePartition):
         """
         oid = self.oid
         call_queue = self.call_queue + [(func, kwargs)]
-        result, length, width, ip = deploy_ray_func.remote(call_queue, oid)
-        return PandasOnRayFramePartition(result, length, width, ip)
+        result, length, width = deploy_ray_func.remote(call_queue, oid)
+        return PandasOnRayFramePartition(result, length, width)
 
     def add_to_apply_calls(self, func, **kwargs):
         return PandasOnRayFramePartition(
@@ -79,7 +79,6 @@ class PandasOnRayFramePartition(BaseFramePartition):
             self.oid,
             self._length_cache,
             self._width_cache,
-            self._ip_cache,
         ) = deploy_ray_func.remote(call_queue, oid)
         self.call_queue = []
 
@@ -197,13 +196,19 @@ class PandasOnRayFramePartition(BaseFramePartition):
         if self._ip_cache is None:
             if len(self.call_queue):
                 self.drain_call_queue()
+            # Since `ray.wait` returns a tuple of completed and not completed object refs as lists
+            # we need to retrive only completed object ref via `[0][0]` indexing.
+            oid = ray.wait([self.oid])[0][0]
+            locations = ray.objects(oid.hex()).get("Locations", None)
+            # `oid` is stored in plasma store
+            if locations:
+                for node in ray.nodes():
+                    if locations[0] == node["NodeID"]:
+                        self._ip_cache = node["NodeManagerAddress"]
+                        break
+            # `oid` is stored in in-process store
             else:
-                self._ip_cache = self.apply(lambda df: df)._ip_cache
-        if isinstance(self._ip_cache, ray.ObjectID):
-            try:
-                self._ip_cache = ray.get(self._ip_cache)
-            except RayTaskError as e:
-                handle_ray_task_error(e)
+                self._ip_cache = get_node_ip_address()
         return self._ip_cache
 
     @classmethod
@@ -224,7 +229,7 @@ def get_index_and_columns(df):
     return len(df.index), len(df.columns)
 
 
-@ray.remote(num_returns=4)
+@ray.remote(num_returns=3)
 def deploy_ray_func(call_queue, partition):  # pragma: no cover
     def deserialize(obj):
         if isinstance(obj, ray.ObjectRef):
@@ -253,5 +258,4 @@ def deploy_ray_func(call_queue, partition):  # pragma: no cover
         result,
         len(result) if hasattr(result, "__len__") else 0,
         len(result.columns) if hasattr(result, "columns") else 0,
-        get_node_ip_address(),
     )
