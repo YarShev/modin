@@ -604,3 +604,16 @@ class ExperimentalOmnisciOnNativeFactory(BaseFactory):
 @doc(_doc_factory_class, backend_name="experimental remote OmnisciOnNative")
 class ExperimentalOmnisciOnCloudnativeFactory(ExperimentalRemoteFactory):
     wrapped_factory = ExperimentalOmnisciOnNativeFactory
+
+
+class ExperimentalPandasOnScaleoutFactory(BaseFactory):
+    @classmethod
+    def prepare(cls):
+        """
+        Fills in .io_cls class attribute lazily
+        """
+        from modin.experimental.engines.scaleout.pandas_on_scaleout.io import (
+            PandasOnScaleoutIO,
+        )
+
+        cls.io_cls = PandasOnScaleoutIO
