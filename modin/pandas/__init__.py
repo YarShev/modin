@@ -105,7 +105,12 @@ def _update_engine(publisher: Parameter):
     global dask_client
     from modin.config import Backend, CpuCount
 
-    if publisher.get() == "Ray":
+    if publisher.get() == "Scaleout":
+        if _is_first_update.get("Scaleout", True):
+            import scaleout
+
+            scaleout.init()
+    elif publisher.get() == "Ray":
         from modin.engines.ray.utils import initialize_ray
 
         # With OmniSci backend there is only a single worker per node
