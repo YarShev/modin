@@ -53,12 +53,19 @@ class Engine(EnvironmentVariable, type=str):
     """
 
     varname = "MODIN_ENGINE"
-    choices = ("Ray", "Dask", "Python")
+    choices = ("Scaleout", "Ray", "Dask", "Python")
 
     @classmethod
     def _get_default(cls):
         if IsDebug.get():
             return "Python"
+        try:
+            import scaleout  # noqa: F401
+
+        except ImportError:
+            pass
+        else:
+            return "Scaleout"
         try:
             import ray
 

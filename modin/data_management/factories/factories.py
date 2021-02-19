@@ -323,3 +323,16 @@ class ExperimentalOmnisciOnRayFactory(BaseFactory):
 
 class ExperimentalOmnisciOnCloudrayFactory(ExperimentalRemoteFactory):
     wrapped_factory = ExperimentalOmnisciOnRayFactory
+
+
+class ExperimentalPandasOnScaleoutFactory(BaseFactory):
+    @classmethod
+    def prepare(cls):
+        """
+        Fills in .io_cls class attribute lazily
+        """
+        from modin.experimental.engines.scaleout.pandas_on_scaleout.io import (
+            PandasOnScaleoutIO,
+        )
+
+        cls.io_cls = PandasOnScaleoutIO
