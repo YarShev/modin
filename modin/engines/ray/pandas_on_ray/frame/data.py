@@ -17,7 +17,7 @@ from .partition_manager import PandasOnRayFrameManager
 from modin.engines.base.frame.data import BasePandasFrame
 from modin.backends.pandas.parsers import find_common_type_cat as find_common_type
 
-import ray
+import scaleout
 
 
 class PandasOnRayFrame(BasePandasFrame):
@@ -31,7 +31,7 @@ class PandasOnRayFrame(BasePandasFrame):
         # the limited data seen by each worker. We use pandas to compute the exact dtype
         # over the whole column for each column.
         dtypes = (
-            pandas.concat(ray.get(list_of_dtypes), axis=1)
+            pandas.concat(scaleout.get(list_of_dtypes), axis=1)
             .apply(lambda row: find_common_type(row.values), axis=1)
             .squeeze(axis=0)
         )

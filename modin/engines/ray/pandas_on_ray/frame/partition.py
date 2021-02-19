@@ -17,14 +17,13 @@ from modin.engines.base.frame.partition import BaseFramePartition
 from modin.data_management.utils import length_fn_pandas, width_fn_pandas
 from modin.engines.ray.utils import handle_ray_task_error
 
-import ray
-from ray.services import get_node_ip_address
+import scaleout
 from ray.worker import RayTaskError
 
 
 class PandasOnRayFramePartition(BaseFramePartition):
     def __init__(self, object_id, length=None, width=None, ip=None, call_queue=None):
-        assert type(object_id) is ray.ObjectRef
+        assert scaleout.is_future(object_id)
 
         self.oid = object_id
         if call_queue is None:
@@ -43,7 +42,8 @@ class PandasOnRayFramePartition(BaseFramePartition):
         if len(self.call_queue):
             self.drain_call_queue()
         try:
-            return ray.get(self.oid)
+            # breakpoint()
+            return scaleout.get(self.oid)
         except RayTaskError as e:
             handle_ray_task_error(e)
 
@@ -61,13 +61,13 @@ class PandasOnRayFramePartition(BaseFramePartition):
             A RayRemotePartition object.
         """
         oid = self.oid
-        call_queue = self.call_queue + [(func, kwargs)]
+        call_queue = self.call_queue + [[func, kwargs]]
         result, length, width, ip = deploy_ray_func.remote(call_queue, oid)
         return PandasOnRayFramePartition(result, length, width, ip)
 
     def add_to_apply_calls(self, func, **kwargs):
         return PandasOnRayFramePartition(
-            self.oid, call_queue=self.call_queue + [(func, kwargs)]
+            self.oid, call_queue=self.call_queue + [[func, kwargs]]
         )
 
     def drain_call_queue(self):
@@ -145,7 +145,9 @@ class PandasOnRayFramePartition(BaseFramePartition):
         Returns:
             A `RayRemotePartition` object.
         """
-        return PandasOnRayFramePartition(ray.put(obj), len(obj.index), len(obj.columns))
+        return PandasOnRayFramePartition(
+            scaleout.put(obj), len(obj.index), len(obj.columns)
+        )
 
     @classmethod
     def preprocess_func(cls, func):
@@ -157,19 +159,19 @@ class PandasOnRayFramePartition(BaseFramePartition):
         Returns:
             A ray.ObjectRef.
         """
-        return ray.put(func)
+        return func
 
     def length(self):
         if self._length_cache is None:
             if len(self.call_queue):
                 self.drain_call_queue()
             else:
-                self._length_cache, self._width_cache = get_index_and_columns.remote(
-                    self.oid
-                )
-        if isinstance(self._length_cache, ray.ObjectRef):
+                self._length_cache, self._width_cache = get_index_and_columns.options(
+                    num_returns=2
+                ).remote(self.oid)
+        if scaleout.is_future(self._length_cache):
             try:
-                self._length_cache = ray.get(self._length_cache)
+                self._length_cache = scaleout.get(self._length_cache)
             except RayTaskError as e:
                 handle_ray_task_error(e)
         return self._length_cache
@@ -179,12 +181,12 @@ class PandasOnRayFramePartition(BaseFramePartition):
             if len(self.call_queue):
                 self.drain_call_queue()
             else:
-                self._length_cache, self._width_cache = get_index_and_columns.remote(
-                    self.oid
-                )
-        if isinstance(self._width_cache, ray.ObjectRef):
+                self._length_cache, self._width_cache = get_index_and_columns.options(
+                    num_returns=2
+                ).remote(self.oid)
+        if scaleout.is_future(self._width_cache):
             try:
-                self._width_cache = ray.get(self._width_cache)
+                self._width_cache = scaleout.get(self._width_cache)
             except RayTaskError as e:
                 handle_ray_task_error(e)
         return self._width_cache
@@ -202,29 +204,22 @@ class PandasOnRayFramePartition(BaseFramePartition):
         return cls.put(pandas.DataFrame())
 
 
-@ray.remote(num_returns=2)
+@scaleout.remote
 def get_index_and_columns(df):
     return len(df.index), len(df.columns)
 
 
-@ray.remote(num_returns=4)
+@scaleout.remote(num_returns=4)
 def deploy_ray_func(call_queue, partition):  # pragma: no cover
-    def deserialize(obj):
-        if isinstance(obj, ray.ObjectRef):
-            return ray.get(obj)
-        return obj
-
     if len(call_queue) > 1:
         for func, kwargs in call_queue[:-1]:
-            func = deserialize(func)
-            kwargs = deserialize(kwargs)
+            kwargs = scaleout.deserialize(kwargs)
             try:
                 partition = func(partition, **kwargs)
             except ValueError:
                 partition = func(partition.copy(), **kwargs)
     func, kwargs = call_queue[-1]
-    func = deserialize(func)
-    kwargs = deserialize(kwargs)
+    kwargs = scaleout.deserialize(kwargs)
     try:
         result = func(partition, **kwargs)
     # Sometimes Arrow forces us to make a copy of an object before we operate on it. We
@@ -236,5 +231,5 @@ def deploy_ray_func(call_queue, partition):  # pragma: no cover
         result,
         len(result) if hasattr(result, "__len__") else 0,
         len(result.columns) if hasattr(result, "columns") else 0,
-        get_node_ip_address(),
+        scaleout.get_ip(),
     )

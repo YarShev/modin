@@ -16,8 +16,9 @@ import pandas
 from modin.engines.base.frame.axis_partition import PandasFrameAxisPartition
 from .partition import PandasOnRayFramePartition
 
-import ray
-from ray.services import get_node_ip_address
+import scaleout
+
+from scaleout.dask_engine import DaskScaleoutObjectRef
 
 
 class PandasOnRayFrameAxisPartition(PandasFrameAxisPartition):
@@ -30,42 +31,38 @@ class PandasOnRayFrameAxisPartition(PandasFrameAxisPartition):
             self.list_of_ips = [obj.ip for obj in list_of_blocks]
 
     partition_type = PandasOnRayFramePartition
-    instance_type = ray.ObjectRef
+    instance_type = DaskScaleoutObjectRef
 
     @classmethod
     def deploy_axis_func(
         cls, axis, func, num_splits, kwargs, maintain_partitioning, *partitions
     ):
         lengths = kwargs.get("_lengths", None)
-        return deploy_ray_func._remote(
-            args=(
-                PandasFrameAxisPartition.deploy_axis_func,
-                axis,
-                func,
-                num_splits,
-                kwargs,
-                maintain_partitioning,
-            )
-            + tuple(partitions),
-            num_returns=num_splits * 4 if lengths is None else len(lengths) * 4,
+        return deploy_ray_func.options(
+            num_returns=num_splits * 4 if lengths is None else len(lengths) * 4
+        ).remote(
+            PandasFrameAxisPartition.deploy_axis_func,
+            axis,
+            func,
+            num_splits,
+            kwargs,
+            maintain_partitioning,
+            *partitions,
         )
 
     @classmethod
     def deploy_func_between_two_axis_partitions(
         cls, axis, func, num_splits, len_of_left, other_shape, kwargs, *partitions
     ):
-        return deploy_ray_func._remote(
-            args=(
-                PandasFrameAxisPartition.deploy_func_between_two_axis_partitions,
-                axis,
-                func,
-                num_splits,
-                len_of_left,
-                other_shape,
-                kwargs,
-            )
-            + tuple(partitions),
-            num_returns=num_splits * 4,
+        return deploy_ray_func.options(num_returns=num_splits * 4).remote(
+            PandasFrameAxisPartition.deploy_func_between_two_axis_partitions,
+            axis,
+            func,
+            num_splits,
+            len_of_left,
+            other_shape,
+            kwargs,
+            *partitions,
         )
 
     def _wrap_partitions(self, partitions):
@@ -93,7 +90,7 @@ class PandasOnRayFrameRowPartition(PandasOnRayFrameAxisPartition):
     axis = 1
 
 
-@ray.remote
+@scaleout.remote
 def deploy_ray_func(func, *args):  # pragma: no cover
     """
     Run a function on a remote partition.
@@ -112,7 +109,7 @@ def deploy_ray_func(func, *args):  # pragma: no cover
     Ray functions are not detected by codecov (thus pragma: no cover)
     """
     result = func(*args)
-    ip = get_node_ip_address()
+    ip = scaleout.get_ip()
     if isinstance(result, pandas.DataFrame):
         return result, len(result), len(result.columns), ip
     elif all(isinstance(r, pandas.DataFrame) for r in result):

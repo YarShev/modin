@@ -15,7 +15,7 @@ import numpy as np
 
 from modin.engines.base.frame.partition_manager import BaseFrameManager
 
-import ray
+import scaleout
 
 
 class RayFrameManager(BaseFrameManager):
@@ -30,7 +30,7 @@ class RayFrameManager(BaseFrameManager):
         -------
             A NumPy array
         """
-        parts = ray.get(
+        parts = scaleout.get(
             [
                 obj.apply(lambda df, **kwargs: df.to_numpy(**kwargs)).oid
                 for row in partitions

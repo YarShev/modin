@@ -22,30 +22,7 @@ from .partition import PandasOnRayFramePartition
 from modin.error_message import ErrorMessage
 import pandas
 
-import ray
-
-
-@ray.remote
-def func(df, apply_func, call_queue_df=None, call_queues_other=None, *others):
-    if call_queue_df is not None and len(call_queue_df) > 0:
-        for call, kwargs in call_queue_df:
-            if isinstance(call, ray.ObjectRef):
-                call = ray.get(call)
-            if isinstance(kwargs, ray.ObjectRef):
-                kwargs = ray.get(kwargs)
-            df = call(df, **kwargs)
-    new_others = np.empty(shape=len(others), dtype=object)
-    for i, call_queue_other in enumerate(call_queues_other):
-        other = others[i]
-        if call_queue_other is not None and len(call_queue_other) > 0:
-            for call, kwargs in call_queue_other:
-                if isinstance(call, ray.ObjectRef):
-                    call = ray.get(call)
-                if isinstance(kwargs, ray.ObjectRef):
-                    kwargs = ray.get(kwargs)
-                other = call(other, **kwargs)
-        new_others[i] = other
-    return apply_func(df, new_others)
+import scaleout
 
 
 class PandasOnRayFrameManager(RayFrameManager):
@@ -96,38 +73,29 @@ class PandasOnRayFrameManager(RayFrameManager):
                 if len(partitions)
                 else []
             )
-        new_idx = ray.get(new_idx)
+        new_idx = scaleout.get(new_idx)
         return new_idx[0].append(new_idx[1:]) if len(new_idx) else new_idx
 
     @classmethod
     def broadcast_apply(cls, axis, apply_func, left, right, other_name="r"):
-        def mapper(df, others):
-            other = pandas.concat(others, axis=axis ^ 1)
+        def map_func(df, others):
+            other = pandas.concat(scaleout.get(others), axis=axis ^ 1)
             return apply_func(df, **{other_name: other})
 
-        mapper = ray.put(mapper)
-        new_partitions = np.array(
+        rt_axis_parts = cls.axis_partition(right, axis ^ 1)
+        return np.array(
             [
                 [
-                    PandasOnRayFramePartition(
-                        func.remote(
-                            part.oid,
-                            mapper,
-                            part.call_queue,
-                            [obj[col_idx].call_queue for obj in right]
+                    part.apply(
+                        map_func,
+                        **{
+                            "others": rt_axis_parts[col_idx].list_of_blocks
                             if axis
-                            else [obj.call_queue for obj in right[row_idx]],
-                            *(
-                                [obj[col_idx].oid for obj in right]
-                                if axis
-                                else [obj.oid for obj in right[row_idx]]
-                            ),
-                        )
+                            else rt_axis_parts[row_idx].list_of_blocks
+                        },
                     )
                     for col_idx, part in enumerate(left[row_idx])
                 ]
                 for row_idx in range(len(left))
             ]
         )
-
-        return new_partitions
