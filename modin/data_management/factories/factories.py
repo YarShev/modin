@@ -592,3 +592,16 @@ class ExperimentalPandasOnScaleoutFactory(BaseFactory):
         )
 
         cls.io_cls = PandasOnScaleoutIO
+
+
+class ExperimentalOmnisciOnScaleoutFactory(BaseFactory):
+    @classmethod
+    def prepare(cls):
+        """
+        Fills in .io_cls class attribute lazily
+        """
+        from modin.experimental.engines.scaleout.omnisci_on_scaleout.io import (
+            OmnisciOnScaleoutIO,
+        )
+
+        cls.io_cls = OmnisciOnScaleoutIO
