@@ -119,7 +119,7 @@ def run_and_compare(
 
 @pytest.mark.usefixtures("TestReadCSVFixture")
 class TestCSV:
-    root = os.path.abspath(__file__ + "/.." * 6)  # root of modin repo
+    root = os.path.abspath(__file__ + "/.." * 7)  # root of modin repo
 
     boston_housing_names = [
         "index",
