@@ -23,7 +23,7 @@ class OmnisciOnScaleoutFramePartition(BaseFramePartition):
     def __init__(
         self, object_id=None, frame_id=None, arrow_table=None, length=None, width=None
     ):
-        scaleout.is_future(object_id)
+        scaleout.is_object_ref(object_id)
 
         self.oid = object_id
         self.frame_id = frame_id
