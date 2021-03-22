@@ -27,27 +27,6 @@ import pandas
 import scaleout
 
 
-@scaleout.remote
-def deploy_remote_func(
-    df, apply_func, call_queue_df=None, call_queues_other=None, *others
-):
-    if call_queue_df is not None and len(call_queue_df) > 0:
-        for call, kwargs in call_queue_df:
-            call = scaleout.deserialize(call)
-            kwargs = scaleout.deserialize(kwargs)
-            df = call(df, **kwargs)
-    new_others = np.empty(shape=len(others), dtype=object)
-    for i, call_queue_other in enumerate(call_queues_other):
-        other = others[i]
-        if call_queue_other is not None and len(call_queue_other) > 0:
-            for call, kwargs in call_queue_other:
-                call = scaleout.deserialize(call)
-                kwargs = scaleout.deserialize(kwargs)
-                other = call(other, **kwargs)
-        new_others[i] = other
-    return apply_func(df, new_others)
-
-
 class PandasOnScaleoutFrameManager(ScaleoutFrameManager):
     """This method implements the interface in `BaseFrameManager`."""
 
@@ -101,33 +80,22 @@ class PandasOnScaleoutFrameManager(ScaleoutFrameManager):
 
     @classmethod
     def broadcast_apply(cls, axis, apply_func, left, right, other_name="r"):
-        def mapper(df, others):
+        def map_func(df, *others):
             other = pandas.concat(others, axis=axis ^ 1)
             return apply_func(df, **{other_name: other})
 
-        mapper = scaleout.put(mapper)
-        new_partitions = np.array(
+        rt_axis_parts = cls.axis_partition(right, axis ^ 1)
+        return np.array(
             [
                 [
-                    PandasOnScaleoutFramePartition(
-                        deploy_remote_func.remote(
-                            part.oid,
-                            mapper,
-                            part.call_queue,
-                            [obj[col_idx].call_queue for obj in right]
-                            if axis
-                            else [obj.call_queue for obj in right[row_idx]],
-                            *(
-                                [obj[col_idx].oid for obj in right]
-                                if axis
-                                else [obj.oid for obj in right[row_idx]]
-                            ),
-                        )
+                    part.apply(
+                        map_func,
+                        *rt_axis_parts[col_idx].list_of_blocks
+                        if axis
+                        else rt_axis_parts[row_idx].list_of_blocks,
                     )
                     for col_idx, part in enumerate(left[row_idx])
                 ]
                 for row_idx in range(len(left))
             ]
         )
-
-        return new_partitions

@@ -41,7 +41,7 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
             self.drain_call_queue()
         return scaleout.get(self.oid)
 
-    def apply(self, func, **kwargs):
+    def apply(self, func, *args, **kwargs):
         """Apply a function to the object stored in this partition.
 
         Note: It does not matter if func is callable or an ObjectRef. Ray will
@@ -55,13 +55,13 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
             A RayRemotePartition object.
         """
         oid = self.oid
-        call_queue = self.call_queue + [[func, kwargs]]
-        result, length, width, ip = deploy_remote_func.remote(call_queue, oid)
+        call_queue = self.call_queue + [(func, args, kwargs)]
+        result, length, width, ip = self.drain_partition_call_queue(oid, call_queue)
         return PandasOnScaleoutFramePartition(result, length, width, ip)
 
-    def add_to_apply_calls(self, func, **kwargs):
+    def add_to_apply_calls(self, func, *args, **kwargs):
         return PandasOnScaleoutFramePartition(
-            self.oid, call_queue=self.call_queue + [[func, kwargs]]
+            self.oid, call_queue=self.call_queue + [(func, args, kwargs)]
         )
 
     def drain_call_queue(self):
@@ -69,13 +69,27 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
             return
         oid = self.oid
         call_queue = self.call_queue
+        if len(call_queue) > 1:
+            for func, args, kwargs in call_queue[:-1]:
+                oid, _, _, _ = deploy_remote_func.remote(func, oid, *args, **kwargs)
+        func, args, kwargs = call_queue[-1]
         (
             self.oid,
             self._length_cache,
             self._width_cache,
             self._ip_cache,
-        ) = deploy_remote_func.remote(call_queue, oid)
+        ) = deploy_remote_func.remote(func, oid, *args, **kwargs)
         self.call_queue = []
+
+    @staticmethod
+    def drain_partition_call_queue(partition, call_queue):
+        if len(call_queue) > 1:
+            for func, args, kwargs in call_queue[:-1]:
+                partition, _, _, _ = deploy_remote_func.remote(
+                    func, partition, *args, **kwargs
+                )
+        func, args, kwargs = call_queue[-1]
+        return deploy_remote_func.remote(func, partition, *args, **kwargs)
 
     def wait(self):
         self.drain_call_queue()
@@ -161,7 +175,7 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
         Returns:
             A ray.ObjectRef.
         """
-        return func
+        return scaleout.put(func)
 
     def length(self):
         if self._length_cache is None:
@@ -216,23 +230,14 @@ def get_index_and_columns(df):
 
 
 @scaleout.remote(num_returns=4)
-def deploy_remote_func(call_queue, partition):  # pragma: no cover
-    if len(call_queue) > 1:
-        for func, kwargs in call_queue[:-1]:
-            kwargs = scaleout.deserialize(kwargs)
-            try:
-                partition = func(partition, **kwargs)
-            except ValueError:
-                partition = func(partition.copy(), **kwargs)
-    func, kwargs = call_queue[-1]
-    kwargs = scaleout.deserialize(kwargs)
+def deploy_remote_func(func, partition, *args, **kwargs):  # pragma: no cover
     try:
-        result = func(partition, **kwargs)
+        result = func(partition, *args, **kwargs)
     # Sometimes Arrow forces us to make a copy of an object before we operate on it. We
     # don't want the error to propagate to the user, and we want to avoid copying unless
     # we absolutely have to.
     except ValueError:
-        result = func(partition.copy(), **kwargs)
+        result = func(partition.copy(), *args, **kwargs)
     return (
         result,
         len(result) if hasattr(result, "__len__") else 0,
