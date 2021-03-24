@@ -603,3 +603,16 @@ class ExperimentalOmnisciOnScaleoutFactory(BaseFactory):
         )
 
         cls.io_cls = OmnisciOnScaleoutIO
+
+
+class ExperimentalPyarrowOnScaleoutFactory(BaseFactory):  # pragma: no cover
+    @classmethod
+    def prepare(cls):
+        """
+        Fills in .io_cls class attribute lazily
+        """
+        from modin.experimental.engines.scaleout.pyarrow_on_scaleout.io import (
+            PyarrowOnScaleoutIO,
+        )
+
+        cls.io_cls = PyarrowOnScaleoutIO
