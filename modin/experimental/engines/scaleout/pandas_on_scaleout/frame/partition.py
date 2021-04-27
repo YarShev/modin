@@ -21,7 +21,7 @@ import scaleout
 
 class PandasOnScaleoutFramePartition(BaseFramePartition):
     def __init__(self, object_id, length=None, width=None, ip=None, call_queue=None):
-        assert scaleout.is_future(object_id)
+        assert scaleout.is_object_ref(object_id)
 
         self.oid = object_id
         if call_queue is None:
@@ -185,7 +185,7 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
                 self._length_cache, self._width_cache = get_index_and_columns.remote(
                     self.oid
                 )
-        if scaleout.is_future(self._length_cache):
+        if scaleout.is_object_ref(self._length_cache):
             self._length_cache = scaleout.get(self._length_cache)
         return self._length_cache
 
@@ -197,7 +197,7 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
                 self._length_cache, self._width_cache = get_index_and_columns.remote(
                     self.oid
                 )
-        if scaleout.is_future(self._width_cache):
+        if scaleout.is_object_ref(self._width_cache):
             self._width_cache = scaleout.get(self._width_cache)
         return self._width_cache
 
@@ -207,7 +207,7 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
                 self.drain_call_queue()
             else:
                 self._ip_cache = self.apply(lambda df: df)._ip_cache
-        if scaleout.is_future(self._ip_cache):
+        if scaleout.is_object_ref(self._ip_cache):
             self._ip_cache = scaleout.get(self._ip_cache)
         return self._ip_cache
 
