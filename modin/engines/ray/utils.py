@@ -234,6 +234,8 @@ def initialize_ray(
                 for i in range(GpuCount.get()):
                     GPU_MANAGERS.append(GPUManager.remote(i))
 
+    ray.worker.global_worker.run_function_on_all_workers(_import_pandas)
+
     num_cpus = int(ray.cluster_resources()["CPU"])
     num_gpus = int(ray.cluster_resources().get("GPU", 0))
     if Backend.get() == "Cudf":
