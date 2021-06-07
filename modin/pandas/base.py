@@ -2898,9 +2898,19 @@ class BasePandasDataset(object):
     def __rxor__(self, other):
         return self._binary_op("__rxor__", other, axis=0)
 
-    @property
-    def __partitioned__(self):
-        """Implementation of github.com/IntelPython/DPPY-Spec/issues/3."""
+    def __partitioned__(self, partitioning_axis=None):
+        """
+        Implementation of github.com/IntelPython/DPPY-Spec/issues/3.
+
+        Parameters
+        ----------
+        partitioning_axis : {None, 0, 1}, optional
+            An axis to repartition along (0 - row partition, 1 - column partitions).
+
+        Returns
+        -------
+        dict
+        """
         from .dataframe import DataFrame
 
         is_dataframe = isinstance(self, DataFrame)
@@ -2915,7 +2925,17 @@ class BasePandasDataset(object):
                 f"'__partitioned__' is not supported by '{backend}' backend."
             )
 
-        parts = self._query_compiler._modin_frame._partitions
+        if partitioning_axis is not None:
+            parts = self._query_compiler._modin_frame._partition_mgr_cls.axis_partition(
+                self._query_compiler._modin_frame._partitions, partitioning_axis ^ 1
+            )
+            parts = [
+                part.apply(lambda x: x, num_splits=1, maintain_partitioning=False)
+                for part in parts
+            ]
+        else:
+            parts = self._query_compiler._modin_frame._partitions
+
         n_rparts = len(parts)
         n_cparts = len(parts[0])
         # Now compute partition info, including global start and shape of each
