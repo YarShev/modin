@@ -57,7 +57,7 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
         oid = self.oid
         call_queue = self.call_queue + [[func, args, kwargs]]
         if len(call_queue) > 1:
-            result, length, width, ip = apply_list_of_funcs.remote(oid, call_queue)
+            result, length, width, ip = apply_list_of_funcs.remote(call_queue, oid)
         else:
             func, args, kwargs = call_queue[0]
             result, length, width, ip = apply_func.remote(oid, func, *args, **kwargs)
@@ -79,7 +79,7 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
                 self._length_cache,
                 self._width_cache,
                 self._ip_cache,
-            ) = apply_list_of_funcs.remote(oid, call_queue)
+            ) = apply_list_of_funcs.remote(call_queue, oid)
         else:
             func, args, kwargs = call_queue[0]
             (
@@ -246,41 +246,33 @@ def apply_func(partition, func, *args, **kwargs):  # pragma: no cover
 
 
 @scaleout.remote(num_returns=4)
-def apply_list_of_funcs(partition, funcs):  # pragma: no cover
+def apply_list_of_funcs(funcs, partition):  # pragma: no cover
     def deserialize(obj):
         if scaleout.is_object_ref(obj):
             return scaleout.get(obj)
-        elif isinstance(obj, tuple) and any(scaleout.is_object_ref(o) for o in obj):
+        elif isinstance(obj, (tuple, list)) and any(
+            scaleout.is_object_ref(o) for o in obj
+        ):
             return scaleout.get(list(obj))
-        elif isinstance(obj, dict) and any(scaleout.is_object_ref(obj[o]) for o in obj):
-            return scaleout.get(list(obj.values()))
+        elif isinstance(obj, dict) and any(
+            scaleout.is_object_ref(val) for val in obj.values()
+        ):
+            return dict(zip(obj.keys(), scaleout.get(list(obj.values()))))
         else:
             return obj
 
-    if len(funcs) > 1:
-        for func, args, kwargs in funcs[:-1]:
-            func = deserialize(func)
-            args = deserialize(args)
-            kwargs = deserialize(kwargs)
-            try:
-                partition = func(partition, *args, **kwargs)
-            except ValueError:
-                partition = func(partition.copy(), *args, **kwargs)
-    func, args, kwargs = funcs[-1]
-    func = deserialize(func)
-    args = deserialize(args)
-    kwargs = deserialize(kwargs)
+    for func, args, kwargs in funcs:
+        func = deserialize(func)
+        args = deserialize(args)
+        kwargs = deserialize(kwargs)
+        try:
+            partition = func(partition, *args, **kwargs)
+        except ValueError:
+            partition = func(partition.copy(), *args, **kwargs)
 
-    try:
-        result = func(partition, *args, **kwargs)
-    # Sometimes Arrow forces us to make a copy of an object before we operate on it. We
-    # don't want the error to propagate to the user, and we want to avoid copying unless
-    # we absolutely have to.
-    except ValueError:
-        result = func(partition.copy(), *args, **kwargs)
     return (
-        result,
-        len(result) if hasattr(result, "__len__") else 0,
-        len(result.columns) if hasattr(result, "columns") else 0,
+        partition,
+        len(partition) if hasattr(partition, "__len__") else 0,
+        len(partition.columns) if hasattr(partition, "columns") else 0,
         scaleout.get_ip(),
     )
