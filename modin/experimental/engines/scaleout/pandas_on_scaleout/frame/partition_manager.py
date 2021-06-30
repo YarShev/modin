@@ -14,7 +14,7 @@
 import numpy as np
 
 from modin.experimental.engines.scaleout.generic.frame.partition_manager import (
-    ScaleoutFrameManager,
+    ScaleoutFramePartitionManager,
 )
 from .axis_partition import (
     PandasOnScaleoutFrameColumnPartition,
@@ -27,8 +27,8 @@ import pandas
 import scaleout
 
 
-class PandasOnScaleoutFrameManager(ScaleoutFrameManager):
-    """This method implements the interface in `BaseFrameManager`."""
+class PandasOnScaleoutFramePartitionManager(ScaleoutFramePartitionManager):
+    """This class implements the interface in `ScaleoutFramePartitionManager`."""
 
     # This object uses RayRemotePartition objects as the underlying store.
     _partition_class = PandasOnScaleoutFramePartition

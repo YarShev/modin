@@ -47,11 +47,11 @@ class PyarrowOnScaleoutFramePartition(PandasOnScaleoutFramePartition):
         )
 
     @classmethod
-    def length_extraction_fn(cls):
+    def _length_extraction_fn(cls):
         return lambda table: table.num_rows
 
     @classmethod
-    def width_extraction_fn(cls):
+    def _width_extraction_fn(cls):
         return lambda table: table.num_columns - (1 if "index" in table.columns else 0)
 
     @classmethod
