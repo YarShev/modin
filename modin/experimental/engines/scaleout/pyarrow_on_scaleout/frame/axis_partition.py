@@ -20,7 +20,7 @@ import pyarrow
 
 class PyarrowOnScaleoutFrameAxisPartition(BaseFrameAxisPartition):
     def __init__(self, list_of_blocks):
-        # Unwrap from BaseFramePartition object for ease of use
+        # Unwrap from PyarrowOnScaleoutFramePartition object for ease of use
         self.list_of_blocks = [obj.oid for obj in list_of_blocks]
 
     def apply(self, func, num_splits=None, other_axis_partition=None, **kwargs):
