@@ -13,13 +13,13 @@
 
 import pandas
 
-from modin.engines.base.frame.partition import BaseFramePartition
+from modin.engines.base.frame.partition import PandasFramePartition
 from modin.data_management.utils import length_fn_pandas, width_fn_pandas
 
 import scaleout
 
 
-class PandasOnScaleoutFramePartition(BaseFramePartition):
+class PandasOnScaleoutFramePartition(PandasFramePartition):
     def __init__(self, object_id, length=None, width=None, ip=None, call_queue=None):
         assert scaleout.is_object_ref(object_id)
 
@@ -211,11 +211,11 @@ class PandasOnScaleoutFramePartition(BaseFramePartition):
         return self._ip_cache
 
     @classmethod
-    def length_extraction_fn(cls):
+    def _length_extraction_fn(cls):
         return length_fn_pandas
 
     @classmethod
-    def width_extraction_fn(cls):
+    def _width_extraction_fn(cls):
         return width_fn_pandas
 
     @classmethod
