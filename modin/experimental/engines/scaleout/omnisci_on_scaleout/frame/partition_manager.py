@@ -14,7 +14,7 @@
 import numpy as np
 
 from modin.experimental.engines.scaleout.generic.frame.partition_manager import (
-    ScaleoutFrameManager,
+    ScaleoutFramePartitionManager,
 )
 from .axis_partition import (
     OmnisciOnScaleoutFrameColumnPartition,
@@ -31,8 +31,8 @@ import pandas
 import re
 
 
-class OmnisciOnScaleoutFrameManager(ScaleoutFrameManager):
-    """This method implements the interface in `BaseFrameManager`."""
+class OmnisciOnScaleoutFramePartitionManager(ScaleoutFramePartitionManager):
+    """This class implements the interface in `ScaleoutFramePartitionManager`."""
 
     # This object uses ScaleoutRemotePartition objects as the underlying store.
     _partition_class = OmnisciOnScaleoutFramePartition

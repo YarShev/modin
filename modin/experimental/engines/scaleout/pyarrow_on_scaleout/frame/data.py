@@ -14,17 +14,17 @@
 import pandas
 from pandas.core.dtypes.cast import find_common_type
 
-from .partition_manager import PyarrowOnScaleoutFrameManager
-from modin.engines.base.frame.data import BasePandasFrame
+from .partition_manager import PyarrowOnScaleoutFramePartitionManager
+from modin.engines.base.frame.data import PandasFrame
 
 import scaleout
 
 
-class PyarrowOnScaleoutFrame(BasePandasFrame):
+class PyarrowOnScaleoutFrame(PandasFrame):
 
-    _frame_mgr_cls = PyarrowOnScaleoutFrameManager
+    _partition_mgr_cls = PyarrowOnScaleoutFramePartitionManager
 
-    def _apply_index_objs(self, axis=None):
+    def synchronize_labels(self, axis=None):
         """Lazily applies the index object (Index or Columns) to the partitions.
 
         Args:

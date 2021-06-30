@@ -12,7 +12,7 @@
 # governing permissions and limitations under the License.
 
 from modin.experimental.engines.scaleout.generic.frame.partition_manager import (
-    ScaleoutFrameManager,
+    ScaleoutFramePartitionManager,
 )
 from .axis_partition import (
     PyarrowOnScaleoutFrameColumnPartition,
@@ -21,10 +21,10 @@ from .axis_partition import (
 from .partition import PyarrowOnScaleoutFramePartition
 
 
-class PyarrowOnScaleoutFrameManager(ScaleoutFrameManager):
-    """This method implements the interface in `BaseFrameManager`."""
+class PyarrowOnScaleoutFramePartitionManager(ScaleoutFramePartitionManager):
+    """This class implements the interface in `ScaleoutFramePartitionManager`."""
 
-    # This object uses ScaleoutRemotePartition objects as the underlying store.
+    # This object uses PyarrowOnScaleoutFramePartition objects as the underlying store.
     _partition_class = PyarrowOnScaleoutFramePartition
     _column_partitions_class = PyarrowOnScaleoutFrameColumnPartition
     _row_partition_class = PyarrowOnScaleoutFrameRowPartition

@@ -17,7 +17,7 @@ from .partition import OmnisciOnScaleoutFramePartition
 
 class OmnisciOnScaleoutFrameAxisPartition(PandasFrameAxisPartition):
     def __init__(self, list_of_blocks):
-        # Unwrap from BaseFramePartition object for ease of use
+        # Unwrap from OmnisciOnScaleoutFramePartition object for ease of use
         for obj in list_of_blocks:
             obj.drain_call_queue()
         self.list_of_blocks = [obj.oid for obj in list_of_blocks]

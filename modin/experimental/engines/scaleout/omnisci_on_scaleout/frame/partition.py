@@ -13,13 +13,13 @@
 
 import pandas
 
-from modin.engines.base.frame.partition import BaseFramePartition
+from modin.engines.base.frame.partition import PandasFramePartition
 import pyarrow
 
 import scaleout
 
 
-class OmnisciOnScaleoutFramePartition(BaseFramePartition):
+class OmnisciOnScaleoutFramePartition(PandasFramePartition):
     def __init__(
         self, object_id=None, frame_id=None, arrow_table=None, length=None, width=None
     ):

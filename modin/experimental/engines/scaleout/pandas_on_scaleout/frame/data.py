@@ -13,16 +13,16 @@
 
 import pandas
 
-from .partition_manager import PandasOnScaleoutFrameManager
-from modin.engines.base.frame.data import BasePandasFrame
+from .partition_manager import PandasOnScaleoutFramePartitionManager
+from modin.engines.base.frame.data import PandasFrame
 from modin.backends.pandas.parsers import find_common_type_cat as find_common_type
 
 import scaleout
 
 
-class PandasOnScaleoutFrame(BasePandasFrame):
+class PandasOnScaleoutFrame(PandasFrame):
 
-    _frame_mgr_cls = PandasOnScaleoutFrameManager
+    _partition_mgr_cls = PandasOnScaleoutFramePartitionManager
 
     @classmethod
     def combine_dtypes(cls, list_of_dtypes, column_names):

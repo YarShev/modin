@@ -21,7 +21,7 @@ import scaleout
 
 class PandasOnScaleoutFrameAxisPartition(PandasFrameAxisPartition):
     def __init__(self, list_of_blocks, get_ip=False):
-        # Unwrap from BaseFramePartition object for ease of use
+        # Unwrap from PandasOnScaleoutFramePartition object for ease of use
         for obj in list_of_blocks:
             obj.drain_call_queue()
         self.list_of_blocks = [obj.oid for obj in list_of_blocks]
