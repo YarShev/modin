@@ -338,18 +338,20 @@ class DataFrameGroupBy(object):
         # When `as_index` is False, pandas will always convert to a `DataFrame`, we
         # convert to a list here so that the result will be a `DataFrame`.
         elif not self._as_index and not isinstance(key, list):
-            # Sometimes `__getitem__` doesn't only get the item, it also gets the `by`
-            # column. This logic is here to ensure that we also get the `by` data so
-            # that it is there for `as_index=False`.
-            if (
-                isinstance(self._by, type(self._query_compiler))
-                and all(c in self._columns for c in self._by.columns)
-                and self._drop
-            ):
-                key = list(self._by.columns) + [key]
-            else:
-                key = [key]
+            key = [key]
         if isinstance(key, list) and (make_dataframe or not self._as_index):
+            by = [self._by] if not isinstance(self._by, list) else self._by
+            extra_key = []
+            for o in by:
+                if (
+                    isinstance(o, type(self._query_compiler))
+                    and all(c in self._columns for c in o.columns)
+                    and self._drop
+                ):
+                    extra_key += list(o.columns)
+                elif hashable(o) and o in self._columns and self._drop:
+                    extra_key.append(o)
+            key = extra_key + key
             return DataFrameGroupBy(
                 self._df[key],
                 self._by,

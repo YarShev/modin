@@ -81,6 +81,7 @@ def test_mixed_dtypes_groupby(as_index):
         (lambda x: x % 2,),
         (modin_df["col0"].copy(), pandas_df["col0"].copy()),
         ("col3",),
+        (["col1", "col3"],),
     ]
 
     for by in by_values:
@@ -219,7 +220,8 @@ def test_mixed_dtypes_groupby(as_index):
         eval_general(
             modin_groupby, pandas_groupby, lambda df: df.take(), is_default=True
         )
-        eval___getattr__(modin_groupby, pandas_groupby, "col2")
+        for item in ["col2", ["col2", "col4"]]:
+            eval___getitem__(modin_groupby, pandas_groupby, item)
         eval_groups(modin_groupby, pandas_groupby)
 
 
@@ -440,7 +442,8 @@ def test_simple_row_groupby(by, as_index, col1_category):
         isinstance(o, (pd.Series, pandas.Series)) for o in by
     ):
         # Not yet supported for non-original-column-from-dataframe Series in by:
-        eval___getattr__(modin_groupby, pandas_groupby, "col3")
+        for item in ["col3", ["col3", "col4"]]:
+            eval___getitem__(modin_groupby, pandas_groupby, item)
     eval_groups(modin_groupby, pandas_groupby)
 
 
@@ -565,7 +568,8 @@ def test_single_group_row_groupby():
     eval_general(modin_groupby, pandas_groupby, lambda df: df.tail(n), is_default=True)
     eval_quantile(modin_groupby, pandas_groupby)
     eval_general(modin_groupby, pandas_groupby, lambda df: df.take(), is_default=True)
-    eval___getattr__(modin_groupby, pandas_groupby, "col2")
+    for item in ["col2", ["col2", "col3"]]:
+        eval___getitem__(modin_groupby, pandas_groupby, item)
     eval_groups(modin_groupby, pandas_groupby)
 
 
@@ -1098,7 +1102,7 @@ def eval_quantile(modin_groupby, pandas_groupby):
         df_equals(modin_groupby.quantile(q=0.4), pandas_result)
 
 
-def eval___getattr__(modin_groupby, pandas_groupby, item):
+def eval___getitem__(modin_groupby, pandas_groupby, item):
     eval_general(
         modin_groupby,
         pandas_groupby,
