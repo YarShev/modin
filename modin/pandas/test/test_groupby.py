@@ -238,47 +238,47 @@ class GetColumn:
 @pytest.mark.parametrize(
     "by",
     [
-        [1, 2, 1, 2],
-        lambda x: x % 3,
-        "col1",
-        ["col1"],
-        # col2 contains NaN, is it necessary to test functions like size()
-        "col2",
-        ["col2"],  # 5
-        pytest.param(
-            ["col1", "col2"],
-            marks=pytest.mark.xfail(reason="Excluded because of bug #1554"),
-        ),
-        pytest.param(
-            ["col2", "col4"],
-            marks=pytest.mark.xfail(reason="Excluded because of bug #1554"),
-        ),
-        pytest.param(
-            ["col4", "col2"],
-            marks=pytest.mark.xfail(reason="Excluded because of bug #1554"),
-        ),
-        pytest.param(
-            ["col3", "col4", "col2"],
-            marks=pytest.mark.xfail(reason="Excluded because of bug #1554"),
-        ),
-        # but cum* functions produce undefined results with NaNs so we need to test the same combinations without NaN too
-        ["col5"],  # 10
-        ["col1", "col5"],
+        # [1, 2, 1, 2],
+        # lambda x: x % 3,
+        # "col1",
+        # ["col1"],
+        # # col2 contains NaN, is it necessary to test functions like size()
+        # "col2",
+        # ["col2"],  # 5
+        # pytest.param(
+        #     ["col1", "col2"],
+        #     marks=pytest.mark.xfail(reason="Excluded because of bug #1554"),
+        # ),
+        # pytest.param(
+        #     ["col2", "col4"],
+        #     marks=pytest.mark.xfail(reason="Excluded because of bug #1554"),
+        # ),
+        # pytest.param(
+        #     ["col4", "col2"],
+        #     marks=pytest.mark.xfail(reason="Excluded because of bug #1554"),
+        # ),
+        # pytest.param(
+        #     ["col3", "col4", "col2"],
+        #     marks=pytest.mark.xfail(reason="Excluded because of bug #1554"),
+        # ),
+        # # but cum* functions produce undefined results with NaNs so we need to test the same combinations without NaN too
+        # ["col5"],  # 10
+        # ["col1", "col5"],
         ["col5", "col4"],
-        ["col4", "col5"],
-        ["col5", "col4", "col1"],
-        ["col1", pd.Series([1, 5, 7, 8])],  # 15
-        [pd.Series([1, 5, 7, 8])],
-        [
-            pd.Series([1, 5, 7, 8]),
-            pd.Series([1, 5, 7, 8]),
-            pd.Series([1, 5, 7, 8]),
-            pd.Series([1, 5, 7, 8]),
-            pd.Series([1, 5, 7, 8]),
-        ],
-        ["col1", GetColumn("col5")],
-        [GetColumn("col1"), GetColumn("col5")],
-        [GetColumn("col1")],  # 20
+        # ["col4", "col5"],
+        # ["col5", "col4", "col1"],
+        # ["col1", pd.Series([1, 5, 7, 8])],  # 15
+        # [pd.Series([1, 5, 7, 8])],
+        # [
+        #     pd.Series([1, 5, 7, 8]),
+        #     pd.Series([1, 5, 7, 8]),
+        #     pd.Series([1, 5, 7, 8]),
+        #     pd.Series([1, 5, 7, 8]),
+        #     pd.Series([1, 5, 7, 8]),
+        # ],
+        # ["col1", GetColumn("col5")],
+        # [GetColumn("col1"), GetColumn("col5")],
+        # [GetColumn("col1")],  # 20
     ],
 )
 @pytest.mark.parametrize("as_index", [True, False])
@@ -315,129 +315,130 @@ def test_simple_row_groupby(by, as_index, col1_category):
 
     modin_groupby_equals_pandas(modin_groupby, pandas_groupby)
     eval_ngroups(modin_groupby, pandas_groupby)
-    eval_shift(modin_groupby, pandas_groupby)
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.ffill(), is_default=True)
-    eval_general(
-        modin_groupby,
-        pandas_groupby,
-        lambda df: df.sem(),
-        modin_df_almost_equals_pandas,
-        is_default=True,
-    )
-    eval_mean(modin_groupby, pandas_groupby)
-    eval_any(modin_groupby, pandas_groupby)
-    eval_min(modin_groupby, pandas_groupby)
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.idxmax(), is_default=True)
-    eval_ndim(modin_groupby, pandas_groupby)
-    if not check_df_columns_have_nans(modin_df, by):
-        # cum* functions produce undefined results for columns with NaNs so we run them only when "by" columns contain no NaNs
-        eval_general(modin_groupby, pandas_groupby, lambda df: df.cumsum(axis=0))
-        eval_general(modin_groupby, pandas_groupby, lambda df: df.cummax(axis=0))
-        eval_general(modin_groupby, pandas_groupby, lambda df: df.cummin(axis=0))
-        eval_general(modin_groupby, pandas_groupby, lambda df: df.cumprod(axis=0))
+    # eval_shift(modin_groupby, pandas_groupby)
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.ffill(), is_default=True)
+    # eval_general(
+    #     modin_groupby,
+    #     pandas_groupby,
+    #     lambda df: df.sem(),
+    #     modin_df_almost_equals_pandas,
+    #     is_default=True,
+    # )
+    # eval_mean(modin_groupby, pandas_groupby)
+    # eval_any(modin_groupby, pandas_groupby)
+    # eval_min(modin_groupby, pandas_groupby)
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.idxmax(), is_default=True)
+    # eval_ndim(modin_groupby, pandas_groupby)
+    # if not check_df_columns_have_nans(modin_df, by):
+    #     # cum* functions produce undefined results for columns with NaNs so we run them only when "by" columns contain no NaNs
+    #     eval_general(modin_groupby, pandas_groupby, lambda df: df.cumsum(axis=0))
+    #     eval_general(modin_groupby, pandas_groupby, lambda df: df.cummax(axis=0))
+    #     eval_general(modin_groupby, pandas_groupby, lambda df: df.cummin(axis=0))
+    #     eval_general(modin_groupby, pandas_groupby, lambda df: df.cumprod(axis=0))
 
-    eval_general(
-        modin_groupby,
-        pandas_groupby,
-        lambda df: df.pct_change(),
-        modin_df_almost_equals_pandas,
-        is_default=True,
-    )
+    # eval_general(
+    #     modin_groupby,
+    #     pandas_groupby,
+    #     lambda df: df.pct_change(),
+    #     modin_df_almost_equals_pandas,
+    #     is_default=True,
+    # )
 
-    # Workaround for Pandas bug #34656. Recreate groupby object for Pandas
-    pandas_groupby = pandas_df.groupby(by=pandas_by, as_index=as_index)
-    apply_functions = [
-        lambda df: df.sum(),
-        lambda df: pandas.Series([1, 2, 3, 4], name="result"),
-        min,
-    ]
-    for func in apply_functions:
-        eval_apply(modin_groupby, pandas_groupby, func)
+    # # Workaround for Pandas bug #34656. Recreate groupby object for Pandas
+    # pandas_groupby = pandas_df.groupby(by=pandas_by, as_index=as_index)
+    # apply_functions = [
+    #     lambda df: df.sum(),
+    #     lambda df: pandas.Series([1, 2, 3, 4], name="result"),
+    #     min,
+    # ]
+    # for func in apply_functions:
+    #     eval_apply(modin_groupby, pandas_groupby, func)
 
-    eval_dtypes(modin_groupby, pandas_groupby)
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.first(), is_default=True)
-    eval_general(
-        modin_groupby, pandas_groupby, lambda df: df.backfill(), is_default=True
-    )
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.bfill(), is_default=True)
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.idxmin(), is_default=True)
-    eval_prod(modin_groupby, pandas_groupby)
-    if as_index:
-        eval_std(modin_groupby, pandas_groupby)
-        eval_var(modin_groupby, pandas_groupby)
-        eval_skew(modin_groupby, pandas_groupby)
+    # eval_dtypes(modin_groupby, pandas_groupby)
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.first(), is_default=True)
+    # eval_general(
+    #     modin_groupby, pandas_groupby, lambda df: df.backfill(), is_default=True
+    # )
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.bfill(), is_default=True)
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.idxmin(), is_default=True)
+    # eval_prod(modin_groupby, pandas_groupby)
+    # if as_index:
+    #     eval_std(modin_groupby, pandas_groupby)
+    #     eval_var(modin_groupby, pandas_groupby)
+    #     eval_skew(modin_groupby, pandas_groupby)
 
-    agg_functions = [lambda df: df.sum(), "min", "max", min, sum]
-    for func in agg_functions:
-        eval_agg(modin_groupby, pandas_groupby, func)
-        eval_aggregate(modin_groupby, pandas_groupby, func)
+    # agg_functions = [lambda df: df.sum(), "min", "max", min, sum]
+    # for func in agg_functions:
+    #     eval_agg(modin_groupby, pandas_groupby, func)
+    #     eval_aggregate(modin_groupby, pandas_groupby, func)
 
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.last(), is_default=True)
-    eval_general(
-        modin_groupby,
-        pandas_groupby,
-        lambda df: df.mad(),
-        modin_df_almost_equals_pandas,
-        is_default=True,
-    )
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.rank())
-    eval_max(modin_groupby, pandas_groupby)
-    eval_len(modin_groupby, pandas_groupby)
-    eval_sum(modin_groupby, pandas_groupby)
-    eval_ngroup(modin_groupby, pandas_groupby)
-    # Pandas raising exception when 'by' contains categorical key and `as_index=False`
-    # because of a bug: https://github.com/pandas-dev/pandas/issues/36698
-    # Modin correctly processes the result, so that's why `check_exception_type=None` in some cases
-    eval_general(
-        modin_groupby,
-        pandas_groupby,
-        lambda df: df.nunique(),
-        check_exception_type=None if (col1_category and not as_index) else True,
-    )
-    eval_median(modin_groupby, pandas_groupby)
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.head(n), is_default=True)
-    eval_general(
-        modin_groupby,
-        pandas_groupby,
-        lambda df: df.cov(),
-        modin_df_almost_equals_pandas,
-        is_default=True,
-    )
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.last(), is_default=True)
+    # eval_general(
+    #     modin_groupby,
+    #     pandas_groupby,
+    #     lambda df: df.mad(),
+    #     modin_df_almost_equals_pandas,
+    #     is_default=True,
+    # )
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.rank())
+    # eval_max(modin_groupby, pandas_groupby)
+    # eval_len(modin_groupby, pandas_groupby)
+    # eval_sum(modin_groupby, pandas_groupby)
+    # eval_ngroup(modin_groupby, pandas_groupby)
+    # # Pandas raising exception when 'by' contains categorical key and `as_index=False`
+    # # because of a bug: https://github.com/pandas-dev/pandas/issues/36698
+    # # Modin correctly processes the result, so that's why `check_exception_type=None` in some cases
+    # eval_general(
+    #     modin_groupby,
+    #     pandas_groupby,
+    #     lambda df: df.nunique(),
+    #     check_exception_type=None if (col1_category and not as_index) else True,
+    # )
+    # eval_median(modin_groupby, pandas_groupby)
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.head(n), is_default=True)
+    # eval_general(
+    #     modin_groupby,
+    #     pandas_groupby,
+    #     lambda df: df.cov(),
+    #     modin_df_almost_equals_pandas,
+    #     is_default=True,
+    # )
 
-    if not check_df_columns_have_nans(modin_df, by):
-        # Pandas groupby.transform does not work correctly with NaN values in grouping columns. See Pandas bug 17093.
-        transform_functions = [lambda df: df + 4, lambda df: -df - 10]
-        for func in transform_functions:
-            eval_general(
-                modin_groupby,
-                pandas_groupby,
-                lambda df: df.transform(func),
-                check_exception_type=None,
-            )
+    # if not check_df_columns_have_nans(modin_df, by):
+    #     # Pandas groupby.transform does not work correctly with NaN values in grouping columns. See Pandas bug 17093.
+    #     transform_functions = [lambda df: df + 4, lambda df: -df - 10]
+    #     for func in transform_functions:
+    #         eval_general(
+    #             modin_groupby,
+    #             pandas_groupby,
+    #             lambda df: df.transform(func),
+    #             check_exception_type=None,
+    #         )
 
-    pipe_functions = [lambda dfgb: dfgb.sum()]
-    for func in pipe_functions:
-        eval_pipe(modin_groupby, pandas_groupby, func)
+    # pipe_functions = [lambda dfgb: dfgb.sum()]
+    # for func in pipe_functions:
+    #     eval_pipe(modin_groupby, pandas_groupby, func)
 
-    eval_general(
-        modin_groupby,
-        pandas_groupby,
-        lambda df: df.corr(),
-        modin_df_almost_equals_pandas,
-        is_default=True,
-    )
-    eval_fillna(modin_groupby, pandas_groupby)
-    eval_count(modin_groupby, pandas_groupby)
-    if get_current_backend() != "BaseOnPython":
-        eval_general(
-            modin_groupby,
-            pandas_groupby,
-            lambda df: df.size(),
-            check_exception_type=None,
-        )
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.tail(n), is_default=True)
-    eval_quantile(modin_groupby, pandas_groupby)
-    eval_general(modin_groupby, pandas_groupby, lambda df: df.take(), is_default=True)
+    # eval_general(
+    #     modin_groupby,
+    #     pandas_groupby,
+    #     lambda df: df.corr(),
+    #     modin_df_almost_equals_pandas,
+    #     is_default=True,
+    # )
+    # eval_fillna(modin_groupby, pandas_groupby)
+    # eval_count(modin_groupby, pandas_groupby)
+    # if get_current_backend() != "BaseOnPython":
+    #     eval_general(
+    #         modin_groupby,
+    #         pandas_groupby,
+    #         lambda df: df.size(),
+    #         check_exception_type=None,
+    #     )
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.tail(n), is_default=True)
+    # eval_quantile(modin_groupby, pandas_groupby)
+    # eval_general(modin_groupby, pandas_groupby, lambda df: df.take(), is_default=True)
+    breakpoint()
     if isinstance(by, list) and not any(
         isinstance(o, (pd.Series, pandas.Series)) for o in by
     ):

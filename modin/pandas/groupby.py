@@ -342,19 +342,28 @@ class DataFrameGroupBy(object):
         if isinstance(key, list) and (make_dataframe or not self._as_index):
             by = [self._by] if not isinstance(self._by, list) else self._by
             extra_key = []
-            for o in by:
+            new_by = []
+            idx_to_del = []
+            for i, o in enumerate(by):
                 if (
                     isinstance(o, type(self._query_compiler))
                     and all(c in self._columns for c in o.columns)
                     and self._drop
                 ):
-                    extra_key += list(o.columns)
-                elif hashable(o) and o in self._columns and self._drop:
+                    mask_key = [c for c in list(o.columns) if c not in key]
+                    if len(mask_key) != list(o.columns):
+                        idx_to_del.append(i)
+                        new_by.append(o.getitem_column_array(mask_key))
+                    extra_key += mask_key
+                elif hashable(o) and o in self._columns and o not in key and self._drop:
                     extra_key.append(o)
+                    idx_to_del.append(i)
+            by = [by[i] for i in range(len(by)) if i not in idx_to_del]
+            by = new_by + by
             key = extra_key + key
             return DataFrameGroupBy(
                 self._df[key],
-                self._by,
+                by,
                 self._axis,
                 idx_name=self._idx_name,
                 drop=self._drop,
