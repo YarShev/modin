@@ -128,9 +128,9 @@ class OmnisciOnScaleoutFrame(PandasFrame):
             if table.column_names[0] != f"F_{self._table_cols[0]}":
                 new_names = [f"F_{col}" for col in table.column_names]
                 new_table = table.rename_columns(new_names)
-                self._partitions[0][0] = self._partition_mgr_cls._partition_class.put_arrow(
-                    new_table
-                )
+                self._partitions[0][
+                    0
+                ] = self._partition_mgr_cls._partition_class.put_arrow(new_table)
 
         self._uses_rowid = uses_rowid
         # Tests use forced execution mode to take control over frame
