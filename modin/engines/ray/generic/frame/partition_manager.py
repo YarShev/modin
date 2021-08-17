@@ -14,6 +14,7 @@
 """The module holds Modin partition manager implemented for Ray."""
 
 import numpy as np
+import pandas
 
 from modin.engines.base.frame.partition_manager import PandasFramePartitionManager
 
@@ -22,6 +23,48 @@ import ray
 
 class GenericRayFramePartitionManager(PandasFramePartitionManager):
     """The class implements the interface in `PandasFramePartitionManager`."""
+
+    @classmethod
+    def to_pandas(cls, partitions):
+        """
+        Convert `partitions` into a NumPy array.
+
+        Parameters
+        ----------
+        partitions : NumPy array
+            A 2-D array of partitions to convert to local NumPy array.
+        **kwargs : dict
+            Keyword arguments to pass to each partition ``.to_numpy()`` call.
+
+        Returns
+        -------
+        NumPy array
+        """
+        retrieved_objects = ray.get([obj.apply(lambda df: df).oid for row in partitions for obj in row])
+        n = partitions.shape[1]
+        retrieved_objects = [retrieved_objects[i * n : (i + 1) * n] for i in list(range(partitions.shape[0]))]
+
+        if all(
+            isinstance(part, pandas.Series) for row in retrieved_objects for part in row
+        ):
+            axis = 0
+        elif all(
+            isinstance(part, pandas.DataFrame)
+            for row in retrieved_objects
+            for part in row
+        ):
+            axis = 1
+        else:
+            ErrorMessage.catch_bugs_and_request_email(True)
+        df_rows = [
+            pandas.concat([part for part in row], axis=axis)
+            for row in retrieved_objects
+            if not all(part.empty for part in row)
+        ]
+        if len(df_rows) == 0:
+            return pandas.DataFrame()
+        else:
+            return cls.concatenate(df_rows)
 
     @classmethod
     def to_numpy(cls, partitions, **kwargs):
