@@ -107,12 +107,6 @@ def _update_engine(publisher: Parameter):
     from modin.config import Backend, CpuCount
 
     if publisher.get() == "Scaleout":
-        # With OmniSci backend there is only a single worker per node
-        # and we allow it to work on all cores.
-        if Backend.get() == "Omnisci":
-            CpuCount.put(1)
-            os.environ["OMP_NUM_THREADS"] = str(multiprocessing.cpu_count())
-
         if _is_first_update.get("Scaleout", True):
             import scaleout
 
