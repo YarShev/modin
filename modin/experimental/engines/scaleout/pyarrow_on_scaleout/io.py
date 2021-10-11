@@ -11,6 +11,8 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+"""Module for housing IO classes with PyArrow backend and Scaleout engine."""
+
 from modin.backends.pyarrow.query_compiler import PyarrowQueryCompiler
 from modin.experimental.engines.scaleout.generic.io import ScaleoutIO
 from modin.experimental.engines.scaleout.pyarrow_on_scaleout.frame.data import (
@@ -25,12 +27,16 @@ from modin.engines.base.io import CSVDispatcher
 
 
 class PyarrowOnScaleoutCSVDispatcher(ScaleoutTask, PyarrowCSVParser, CSVDispatcher):
+    """Class handles utils for reading `.csv` files with PyArrow backend and Scaleout engine."""
+
     frame_cls = PyarrowOnScaleoutFrame
     frame_partition_cls = PyarrowOnScaleoutFramePartition
     query_compiler_cls = PyarrowQueryCompiler
 
 
 class PyarrowOnScaleoutIO(ScaleoutIO):
+    """Class for storing IO functions operated on PyArrow backend and Scaleout engine."""
+
     frame_cls = PyarrowOnScaleoutFrame
     frame_partition_cls = PyarrowOnScaleoutFramePartition
     query_compiler_cls = PyarrowQueryCompiler

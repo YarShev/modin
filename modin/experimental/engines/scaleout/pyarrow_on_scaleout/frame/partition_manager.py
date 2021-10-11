@@ -11,8 +11,10 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+"""Module houses class for tracking partitions with PyArrow backend and Scaleout engine."""
+
 from modin.experimental.engines.scaleout.generic.frame.partition_manager import (
-    ScaleoutFramePartitionManager,
+    GenericScaleoutFramePartitionManager,
 )
 from .axis_partition import (
     PyarrowOnScaleoutFrameColumnPartition,
@@ -21,8 +23,13 @@ from .axis_partition import (
 from .partition import PyarrowOnScaleoutFramePartition
 
 
-class PyarrowOnScaleoutFramePartitionManager(ScaleoutFramePartitionManager):
-    """This class implements the interface in `ScaleoutFramePartitionManager`."""
+class PyarrowOnScaleoutFramePartitionManager(GenericScaleoutFramePartitionManager):
+    """
+    Class for tracking partitions with PyArrow backend and Scaleout engine.
+
+    Inherits all functionality from ``GenericScaleoutFramePartitionManager`` and ``PandasFramePartitionManager`` base
+    classes.
+    """
 
     # This object uses PyarrowOnScaleoutFramePartition objects as the underlying store.
     _partition_class = PyarrowOnScaleoutFramePartition

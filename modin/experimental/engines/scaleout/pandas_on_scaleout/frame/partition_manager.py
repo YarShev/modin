@@ -11,10 +11,12 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+"""Module houses class that implements ``GenericScaleoutFramePartitionManager`` using Scaleout."""
+
 import numpy as np
 
 from modin.experimental.engines.scaleout.generic.frame.partition_manager import (
-    ScaleoutFramePartitionManager,
+    GenericScaleoutFramePartitionManager,
 )
 from .axis_partition import (
     PandasOnScaleoutFrameColumnPartition,
@@ -27,10 +29,10 @@ import pandas
 import scaleout
 
 
-class PandasOnScaleoutFramePartitionManager(ScaleoutFramePartitionManager):
-    """This class implements the interface in `ScaleoutFramePartitionManager`."""
+class PandasOnScaleoutFramePartitionManager(GenericScaleoutFramePartitionManager):
+    """The class implements the interface in `PandasFramePartitionManager`."""
 
-    # This object uses RayRemotePartition objects as the underlying store.
+    # This object uses ScaleoutRemotePartition objects as the underlying store.
     _partition_class = PandasOnScaleoutFramePartition
     _column_partitions_class = PandasOnScaleoutFrameColumnPartition
     _row_partition_class = PandasOnScaleoutFrameRowPartition
@@ -38,21 +40,21 @@ class PandasOnScaleoutFramePartitionManager(ScaleoutFramePartitionManager):
     @classmethod
     def get_indices(cls, axis, partitions, index_func=None):
         """
-        This gets the internal indices stored in the partitions.
+        Get the internal indices stored in the partitions.
 
         Parameters
         ----------
-            axis : 0 or 1
-                This axis to extract the labels (0 - index, 1 - columns).
-            partitions : NumPy array
-                The array of partitions from which need to extract the labels.
-            index_func : callable
-                The function to be used to extract the function.
+        axis : {0, 1}
+            Axis to extract the labels over.
+        partitions : np.ndarray
+            NumPy array with ``PandasFramePartition``-s.
+        index_func : callable, default: None
+            The function to be used to extract the indices.
 
         Returns
         -------
-        Index
-            A Pandas Index object.
+        pandas.Index
+            A ``pandas.Index`` object.
 
         Notes
         -----
@@ -80,6 +82,29 @@ class PandasOnScaleoutFramePartitionManager(ScaleoutFramePartitionManager):
 
     @classmethod
     def broadcast_apply(cls, axis, apply_func, left, right, other_name="r"):
+        """
+        Broadcast the `right` partitions to `left` and apply `apply_func` to selected indices.
+
+        Parameters
+        ----------
+        axis : {0, 1}
+            Axis to apply and broadcast over.
+        apply_func : callable
+            Function to apply.
+        left : np.ndarray
+            NumPy 2D array of left partitions.
+        right : np.ndarray
+            NumPy 2D array of right partitions.
+        other_name : str, default: "r"
+            Name of key-value argument for `apply_func` that
+            is used to pass `right` to `apply_func`.
+
+        Returns
+        -------
+        np.ndarray
+            An array of partition objects.
+        """
+
         def map_func(df, *others):
             other = pandas.concat(others, axis=axis ^ 1)
             return apply_func(df, **{other_name: other})

@@ -11,6 +11,8 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+"""The module holds the factory which performs I/O using pandas on Scaleout."""
+
 from modin.backends.pandas.query_compiler import PandasQueryCompiler
 from modin.experimental.engines.scaleout.generic.io import ScaleoutIO
 from modin.engines.base.io import (
@@ -41,6 +43,7 @@ from modin.experimental.engines.scaleout.pandas_on_scaleout.frame.data import (
 
 
 class PandasOnScaleoutIO(ScaleoutIO):
+    """Factory providing methods for performing I/O operations using pandas as backend on Scaleout as engine."""
 
     frame_cls = PandasOnScaleoutFrame
     query_compiler_cls = PandasQueryCompiler

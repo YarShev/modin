@@ -11,6 +11,8 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+"""The module holds Modin partition manager implemented for Scaleout."""
+
 import numpy as np
 
 from modin.engines.base.frame.partition_manager import PandasFramePartitionManager
@@ -18,17 +20,24 @@ from modin.engines.base.frame.partition_manager import PandasFramePartitionManag
 import scaleout
 
 
-class ScaleoutFramePartitionManager(PandasFramePartitionManager):
-    """This method implements the interface in `PandasFramePartitionManager`."""
+class GenericScaleoutFramePartitionManager(PandasFramePartitionManager):
+    """The class implements the interface in `PandasFramePartitionManager`."""
 
     @classmethod
     def to_numpy(cls, partitions, **kwargs):
         """
-        Convert this object into a NumPy array from the partitions.
+        Convert `partitions` into a NumPy array.
+
+        Parameters
+        ----------
+        partitions : NumPy array
+            A 2-D array of partitions to convert to local NumPy array.
+        **kwargs : dict
+            Keyword arguments to pass to each partition ``.to_numpy()`` call.
 
         Returns
         -------
-            A NumPy array
+        NumPy array
         """
         parts = scaleout.get(
             [

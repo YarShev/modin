@@ -11,18 +11,27 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+"""The module holds base class implementing required I/O over Scaleout."""
+
 import pandas
 
 from modin.engines.base.io import BaseIO
 
 
 class ScaleoutIO(BaseIO):
+    """Base class for doing I/O operations over Scaleout."""
+
     @classmethod
     def to_sql(cls, qc, **kwargs):
-        """Write records stored in a DataFrame to a SQL database.
-        Args:
-            qc: the query compiler of the DF that we want to run to_sql on
-            kwargs: parameters for pandas.to_sql(**kwargs)
+        """
+        Write records stored in the `qc` to a SQL database.
+
+        Parameters
+        ----------
+        qc : BaseQueryCompiler
+            The query compiler of the Modin dataframe that we want to run ``to_sql`` on.
+        **kwargs : dict
+            Parameters for ``pandas.to_sql(**kwargs)``.
         """
         # we first insert an empty DF in order to create the full table in the database
         # This also helps to validate the input against pandas
@@ -37,10 +46,18 @@ class ScaleoutIO(BaseIO):
         columns = qc.columns
 
         def func(df):
+            """
+            Override column names in the wrapped dataframe and convert it to SQL.
+
+            Notes
+            -----
+            This function returns an empty ``pandas.DataFrame`` because ``apply_full_axis``
+            expects a Frame object as a result of operation (and ``to_sql`` has no dataframe result).
+            """
             df.columns = columns
             df.to_sql(**kwargs)
             return pandas.DataFrame()
 
         result = qc._modin_frame.apply_full_axis(1, func, new_index=[], new_columns=[])
-        # blocking operation
-        result.to_pandas()
+        # FIXME: we should be waiting for completion less expensievely, maybe use _modin_frame.materialize()?
+        result.to_pandas()  # blocking operation

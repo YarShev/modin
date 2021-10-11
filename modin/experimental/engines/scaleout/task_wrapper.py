@@ -11,19 +11,72 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+"""
+The module with helper mixin for executing functions remotely.
+
+To be used as a piece of building a Scaleout-based engine.
+"""
+
 import scaleout
 
 
 @scaleout.remote
 def deploy_remote_func(func, args):  # pragma: no cover
+    """
+    Wrap `func` to ease calling it remotely.
+
+    Parameters
+    ----------
+    func : callable
+        A local function that we want to call remotely.
+    args : dict
+        Keyword arguments to pass to `func` when calling remotely.
+
+    Returns
+    -------
+    scaleout.ObjectRef or list
+        Scaleout identifier of the result being put to object store.
+    """
     return func(**args)
 
 
 class ScaleoutTask:
+    """Mixin that provides means of running functions remotely and getting local results."""
+
     @classmethod
     def deploy(cls, func, num_returns, kwargs):
+        """
+        Run local `func` remotely.
+
+        Parameters
+        ----------
+        func : callable
+            A function to call.
+        num_returns : int
+            Amount of return values expected from `func`.
+        kwargs : dict
+            Keyword arguments to pass to remote instance of `func`.
+
+        Returns
+        -------
+        scaleout.ObjectRef or list
+            Scaleout identifier of the result being put to object store.
+        """
         return deploy_remote_func.options(num_returns=num_returns).remote(func, kwargs)
 
     @classmethod
     def materialize(cls, obj_id):
+        """
+        Get the value of object from the object store.
+
+        Parameters
+        ----------
+        obj_id : scaleout.ObjectID
+            Scaleout object identifier to get the value by.
+
+        Returns
+        -------
+        object
+            Whatever was identified by `obj_id`.
+        """
         return scaleout.get(obj_id)

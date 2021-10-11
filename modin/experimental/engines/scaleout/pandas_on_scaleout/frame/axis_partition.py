@@ -11,6 +11,8 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+"""Module houses classes responsible for storing an axis partition and applying a function to it."""
+
 import pandas
 
 from modin.engines.base.frame.axis_partition import PandasFrameAxisPartition
@@ -20,10 +22,21 @@ import scaleout
 
 
 class PandasOnScaleoutFrameAxisPartition(PandasFrameAxisPartition):
+    """
+    The class implements the interface in ``PandasFrameAxisPartition``.
+
+    Parameters
+    ----------
+    list_of_blocks : list
+        List of ``PandasOnScaleoutFramePartition`` objects.
+    get_ip : bool, default: False
+        Whether to get node IP addresses to conforming partitions or not.
+    """
+
     def __init__(self, list_of_blocks, get_ip=False):
-        # Unwrap from PandasOnScaleoutFramePartition object for ease of use
         for obj in list_of_blocks:
             obj.drain_call_queue()
+        # Unwrap scaleout.ObjectRef from `PandasOnScaleoutFramePartition` object for ease of use
         self.list_of_blocks = [obj.oid for obj in list_of_blocks]
         if get_ip:
             self.list_of_ips = [obj._ip_cache for obj in list_of_blocks]
@@ -34,8 +47,32 @@ class PandasOnScaleoutFrameAxisPartition(PandasFrameAxisPartition):
     def deploy_axis_func(
         cls, axis, func, num_splits, kwargs, maintain_partitioning, *partitions
     ):
+        """
+        Deploy a function along a full axis.
+
+        Parameters
+        ----------
+        axis : {0, 1}
+            The axis to perform the function along.
+        func : callable
+            The function to perform.
+        num_splits : int
+            The number of splits to return (see ``split_result_of_axis_func_pandas``).
+        kwargs : dict
+            Additional keywords arguments to be passed in `func`.
+        maintain_partitioning : bool
+            If True, keep the old partitioning if possible.
+            If False, create a new partition layout.
+        *partitions : iterable
+            All partitions that make up the full axis (row or column).
+
+        Returns
+        -------
+        list
+            A list of ``pandas.DataFrame``-s.
+        """
         lengths = kwargs.get("_lengths", None)
-        return deploy_remote_func.options(
+        return deploy_scaleout_func.options(
             num_returns=(num_splits if lengths is None else len(lengths)) * 4
         ).remote(
             PandasFrameAxisPartition.deploy_axis_func,
@@ -51,7 +88,33 @@ class PandasOnScaleoutFrameAxisPartition(PandasFrameAxisPartition):
     def deploy_func_between_two_axis_partitions(
         cls, axis, func, num_splits, len_of_left, other_shape, kwargs, *partitions
     ):
-        return deploy_remote_func.options(num_returns=num_splits * 4).remote(
+        """
+        Deploy a function along a full axis between two data sets.
+
+        Parameters
+        ----------
+        axis : {0, 1}
+            The axis to perform the function along.
+        func : callable
+            The function to perform.
+        num_splits : int
+            The number of splits to return (see ``split_result_of_axis_func_pandas``).
+        len_of_left : int
+            The number of values in `partitions` that belong to the left data set.
+        other_shape : np.ndarray
+            The shape of right frame in terms of partitions, i.e.
+            (other_shape[i-1], other_shape[i]) will indicate slice to restore i-1 axis partition.
+        kwargs : dict
+            Additional keywords arguments to be passed in `func`.
+        *partitions : iterable
+            All partitions that make up the full axis (row or column) for both data sets.
+
+        Returns
+        -------
+        list
+            A list of ``pandas.DataFrame``-s.
+        """
+        return deploy_scaleout_func.options(num_returns=num_splits * 4).remote(
             PandasFrameAxisPartition.deploy_func_between_two_axis_partitions,
             axis,
             func,
@@ -63,6 +126,19 @@ class PandasOnScaleoutFrameAxisPartition(PandasFrameAxisPartition):
         )
 
     def _wrap_partitions(self, partitions):
+        """
+        Wrap partitions passed as a list of ``scaleout.ObjectRef`` with ``PandasOnScaleoutFramePartition`` class.
+
+        Parameters
+        ----------
+        partitions : list
+            List of ``scaleout.ObjectRef``.
+
+        Returns
+        -------
+        list
+            List of ``PandasOnScaleoutFramePartition`` objects.
+        """
         return [
             self.partition_type(object_id, length, width, ip)
             for (object_id, length, width, ip) in zip(*[iter(partitions)] * 4)
@@ -70,40 +146,61 @@ class PandasOnScaleoutFrameAxisPartition(PandasFrameAxisPartition):
 
 
 class PandasOnScaleoutFrameColumnPartition(PandasOnScaleoutFrameAxisPartition):
-    """The column partition implementation for Scaleout. All of the implementation
-    for this class is in the parent class, and this class defines the axis
-    to perform the computation over.
+    """
+    The column partition implementation.
+
+    All of the implementation for this class is in the parent class,
+    and this class defines the axis to perform the computation over.
+
+    Parameters
+    ----------
+    list_of_blocks : list
+        List of ``PandasOnScaleoutFramePartition`` objects.
+    get_ip : bool, default: False
+        Whether to get node IP addresses to conforming partitions or not.
     """
 
     axis = 0
 
 
 class PandasOnScaleoutFrameRowPartition(PandasOnScaleoutFrameAxisPartition):
-    """The row partition implementation for Scaleout. All of the implementation
-    for this class is in the parent class, and this class defines the axis
-    to perform the computation over.
+    """
+    The row partition implementation.
+
+    All of the implementation for this class is in the parent class,
+    and this class defines the axis to perform the computation over.
+
+    Parameters
+    ----------
+    list_of_blocks : list
+        List of ``PandasOnScaleoutFramePartition`` objects.
+    get_ip : bool, default: False
+        Whether to get node IP addresses to conforming partitions or not.
     """
 
     axis = 1
 
 
 @scaleout.remote
-def deploy_remote_func(func, *args):  # pragma: no cover
+def deploy_scaleout_func(func, *args):  # pragma: no cover
     """
-    Run a function on a remote partition.
+    Execute a function on an axis partition in a worker process.
 
     Parameters
     ----------
     func : callable
-        The function to run.
+        Function to be executed on an axis partition.
+    *args : iterable
+        Additional arguments that need to passed in ``func``.
 
     Returns
     -------
-        The result of the function `func`.
+    list
+        The result of the function ``func`` and metadata for it.
 
     Notes
     -----
-    Ray functions are not detected by codecov (thus pragma: no cover)
+    Scaleout functions are not detected by codecov (thus pragma: no cover).
     """
     result = func(*args)
     ip = scaleout.get_ip()
