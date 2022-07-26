@@ -490,20 +490,70 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             return self.default_to_pandas(pandas.DataFrame.merge, right, **kwargs)
 
+    def _create_index_from_on(self, query_compiler, on, index, columns):
+        on = pandas.Index(on)
+        on_in_columns = on.intersection(columns)
+        on_in_index = on.intersection(index.names)
+        frame1, frame2 = None, None
+        if len(on_in_index) == len(on) == len(index.names):
+            # fast path
+            new_index = index
+        else:
+            if not on_in_index.empty:
+                frame1 = index.to_frame()[on_in_index]
+            if not on_in_columns.empty:
+                frame2 = query_compiler.getitem_array(on_in_columns).to_pandas()
+            if frame1 is not None and frame2 is not None:
+                frame = pandas.concat([frame1, frame2], axis=1, copy=False)
+            else:
+                frame = frame2 if frame1 is None else frame1
+            if len(frame.columns) > 1:
+                new_index = pandas.MultiIndex.from_frame(frame)
+            else:
+                new_index = pandas.Index(frame.squeeze(axis=1))
+        return new_index
+
     def join(self, right, **kwargs):
         on = kwargs.get("on", None)
         how = kwargs.get("how", "left")
         sort = kwargs.get("sort", False)
 
         if how in ["left", "inner"]:
-            right = right.to_pandas()
+            if (
+                how == "left"
+                and isinstance(right, type(self))
+                and not kwargs.get("lsuffix")
+                and not kwargs.get("rsuffix")
+            ):
+                # check that each label exists in index names or columns,
+                # but not in two places at once
+                if not isinstance(on, list):
+                    on = [on]
+                if len(on) > 1 and len(on) != len(right.index.names):
+                    raise ValueError(
+                        'len(left_on) must equal the number of levels in the index of "right"'
+                    )
+                # `on` can include index name and column name in the same time,
+                # but they shouldn't be equally
+                intersection = pandas.Index(self.index.names).intersection(self.columns)
+                if not intersection.empty:
+                    intersected = list(filter(lambda label: label in intersection, on))
+                    raise ValueError(
+                        f"'{intersected[0]}' is both an index level and a column label, which is ambiguous."
+                    )
 
-            def map_func(left, right=right, kwargs=kwargs):
-                return pandas.DataFrame.join(left, right, **kwargs)
+                labels = self._create_index_from_on(self, on, self.index, self.columns)
+                right = right.reindex(axis=0, labels=labels, _reset_index=self.index)
+                new_self = self.concat(1, right, join="left")
+            else:
+                right = right.to_pandas()
 
-            new_self = self.__constructor__(
-                self._modin_frame.apply_full_axis(1, map_func)
-            )
+                def map_func(left, right=right, kwargs=kwargs):
+                    return pandas.DataFrame.join(left, right, **kwargs)
+
+                new_self = self.__constructor__(
+                    self._modin_frame.apply_full_axis(1, map_func)
+                )
             return new_self.sort_rows_by_column_values(on) if sort else new_self
         else:
             return self.default_to_pandas(pandas.DataFrame.join, right, **kwargs)
@@ -514,11 +564,25 @@ class PandasQueryCompiler(BaseQueryCompiler):
     def reindex(self, axis, labels, **kwargs):
         new_index = self.index if axis else labels
         new_columns = labels if axis else self.columns
+        actual_index = None
+        if "_reset_index" in kwargs:
+            actual_index = kwargs.pop("_reset_index")
+
+        def _reindex(df):
+            kwargs["copy"] = False
+            df = df.reindex(labels=labels, axis=axis, **kwargs)
+            if actual_index is not None:
+                df.index = actual_index
+            return df
+
         new_modin_frame = self._modin_frame.apply_full_axis(
             axis,
-            lambda df: df.reindex(labels=labels, axis=axis, **kwargs),
-            new_index=new_index,
+            _reindex,
+            new_index=actual_index
+            if actual_index is not None and axis == 0
+            else new_index,
             new_columns=new_columns,
+            check_axes_sync=False,
         )
         return self.__constructor__(new_modin_frame)
 
