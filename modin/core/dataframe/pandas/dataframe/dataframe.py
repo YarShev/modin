@@ -1844,6 +1844,7 @@ class PandasDataframe(ClassLogger):
         new_index=None,
         new_columns=None,
         dtypes=None,
+        check_axes_sync=True,
     ):
         """
         Perform a function across an entire axis.
@@ -1864,6 +1865,12 @@ class PandasDataframe(ClassLogger):
             The data types of the result. This is an optimization
             because there are functions that always result in a particular data
             type, and allows us to avoid (re)computing it.
+        check_axes_sync : bool, default: True
+            In some cases, synchronization of the external index with the internal
+            indexes of partitions is not required, since when performing certain
+            functions, we know in advance that it must match. A good example is the
+            `reindex` function. Although synchronization is performed asynchronously,
+            it is nevertheless a rather expensive operation.
 
         Returns
         -------
@@ -1881,6 +1888,7 @@ class PandasDataframe(ClassLogger):
             new_columns=new_columns,
             dtypes=dtypes,
             other=None,
+            check_axes_sync=check_axes_sync,
         )
 
     @lazy_metadata_decorator(apply_axis="both")
@@ -2254,6 +2262,7 @@ class PandasDataframe(ClassLogger):
         apply_indices=None,
         enumerate_partitions=False,
         dtypes=None,
+        check_axes_sync=True,
     ):
         """
         Broadcast partitions of `other` Modin DataFrame and apply a function along full axis.
@@ -2281,6 +2290,12 @@ class PandasDataframe(ClassLogger):
             Data types of the result. This is an optimization
             because there are functions that always result in a particular data
             type, and allows us to avoid (re)computing it.
+        check_axes_sync : bool, default: True
+            In some cases, synchronization of the external index with the internal
+            indexes of partitions is not required, since when performing certain
+            functions, we know in advance that it must match. A good example is the
+            `reindex` function. Although synchronization is performed asynchronously,
+            it is nevertheless a rather expensive operation.
 
         Returns
         -------
@@ -2327,9 +2342,10 @@ class PandasDataframe(ClassLogger):
             None,
             dtypes,
         )
-        if new_index is not None:
+        # There is can be case where synchronization is not needed
+        if check_axes_sync and new_index is not None:
             result.synchronize_labels(axis=0)
-        if new_columns is not None:
+        if check_axes_sync and new_columns is not None:
             result.synchronize_labels(axis=1)
         return result
 
