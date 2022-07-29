@@ -14,6 +14,15 @@
 import pandas
 import warnings
 
+orig_copy = pandas.MultiIndex.copy
+
+def new_copy(self, names=None, dtype=None, levels=None, codes=None, deep=False, name=None):
+    result = orig_copy(self, names, dtype, levels, codes, deep, name)
+    if not deep and levels is None and codes is None:
+        result._id = self._id
+    return result
+pandas.MultiIndex.copy = new_copy
+
 from modin._compat import PandasCompatVersion
 
 if PandasCompatVersion.CURRENT == PandasCompatVersion.PY36:
