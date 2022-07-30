@@ -43,14 +43,25 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
         Call queue that needs to be executed on wrapped ``pandas.DataFrame``.
     """
 
-    def __init__(self, data, length=None, width=None, ip=None, call_queue=None):
+    def __init__(
+        self,
+        data,
+        length=None,
+        width=None,
+        ip=None,
+        call_queue=None,
+        length_cache_set=None,
+        width_cache_set=None,
+    ):
         assert isinstance(data, ObjectIDType)
         self._data = data
         if call_queue is None:
             call_queue = []
         self.call_queue = call_queue
         self._length_cache = length
+        self._length_cache_set = length_cache_set
         self._width_cache = width
+        self._width_cache_set = width_cache_set
         self._ip_cache = ip
         self._identity = uuid.uuid4().hex
 
@@ -120,7 +131,9 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
         logger.debug(f"EXIT::Partition.apply::{self._identity}")
         return PandasOnRayDataframePartition(result, length, width, ip)
 
-    def add_to_apply_calls(self, func, *args, **kwargs):
+    def add_to_apply_calls(
+        self, func, *args, new_length=None, new_width=None, **kwargs
+    ):
         """
         Add a function to the call queue.
 
@@ -144,7 +157,12 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
         handle it correctly either way. The keyword arguments are sent as a dictionary.
         """
         return PandasOnRayDataframePartition(
-            self._data, call_queue=self.call_queue + [(func, args, kwargs)]
+            self._data,
+            length=new_length,
+            width=new_width,
+            length_cache_set=new_length,
+            width_cache_set=new_width,
+            call_queue=self.call_queue + [(func, args, kwargs)],
         )
 
     def drain_call_queue(self):
@@ -159,8 +177,8 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
             logger.debug(f"SUBMIT::_apply_list_of_funcs::{self._identity}")
             (
                 self._data,
-                self._length_cache,
-                self._width_cache,
+                length_cache,
+                width_cache,
                 self._ip_cache,
             ) = _apply_list_of_funcs.remote(call_queue, data)
         else:
@@ -170,10 +188,15 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
             logger.debug(f"SUBMIT::_apply_func::{self._identity}")
             (
                 self._data,
-                self._length_cache,
-                self._width_cache,
+                length_cache,
+                width_cache,
                 self._ip_cache,
             ) = _apply_func.remote(data, func, *args, **kwargs)
+
+        if self._length_cache_set is None:
+            self._length_cache = length_cache
+        if self._width_cache_set is None:
+            self._width_cache = width_cache
         logger.debug(f"EXIT::Partition.drain_call_queue::{self._identity}")
         self.call_queue = []
 
@@ -199,7 +222,7 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
             call_queue=self.call_queue,
         )
 
-    def mask(self, row_labels, col_labels):
+    def mask(self, row_labels, col_labels, new_length=None, new_width=None):
         """
         Lazily create a mask that extracts the indices provided.
 
@@ -217,14 +240,21 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
         """
         logger = get_logger()
         logger.debug(f"ENTER::Partition.mask::{self._identity}")
-        new_obj = super().mask(row_labels, col_labels)
-        if isinstance(row_labels, slice) and isinstance(
+        new_obj = super().mask(
+            row_labels, col_labels, new_length=new_length, new_width=new_width
+        )
+        if new_length is not None:
+            new_obj._length_cache = new_length
+        elif isinstance(row_labels, slice) and isinstance(
             self._length_cache, ObjectIDType
         ):
             new_obj._length_cache = compute_sliced_len.remote(
                 row_labels, self._length_cache
             )
-        if isinstance(col_labels, slice) and isinstance(
+
+        if new_width is not None:
+            new_obj._width_cache = new_width
+        elif isinstance(col_labels, slice) and isinstance(
             self._width_cache, ObjectIDType
         ):
             new_obj._width_cache = compute_sliced_len.remote(

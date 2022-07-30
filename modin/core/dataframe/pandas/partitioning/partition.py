@@ -147,7 +147,7 @@ class PandasDataframePartition(ABC):  # pragma: no cover
         """
         return self.apply(lambda df, **kwargs: df.to_numpy(**kwargs)).get()
 
-    def mask(self, row_labels, col_labels):
+    def mask(self, row_labels, col_labels, new_length=None, new_width=None):
         """
         Lazily create a mask that extracts the indices provided.
 
@@ -185,7 +185,11 @@ class PandasDataframePartition(ABC):  # pragma: no cover
         ):
             return copy(self)
 
-        new_obj = self.add_to_apply_calls(lambda df: df.iloc[row_labels, col_labels])
+        new_obj = self.add_to_apply_calls(
+            lambda df: df.iloc[row_labels, col_labels],
+            new_length=new_length,
+            new_width=new_width,
+        )
 
         def try_recompute_cache(indices, previous_cache):
             """Compute new axis-length cache for the masked frame based on its previous cache."""
@@ -195,8 +199,11 @@ class PandasDataframePartition(ABC):  # pragma: no cover
                 return None
             return compute_sliced_len(indices, previous_cache)
 
-        new_obj._length_cache = try_recompute_cache(row_labels, self._length_cache)
-        new_obj._width_cache = try_recompute_cache(col_labels, self._width_cache)
+        if new_length is None:
+            new_obj._length_cache = try_recompute_cache(row_labels, self._length_cache)
+        if new_width is None:
+            new_obj._width_cache = try_recompute_cache(col_labels, self._width_cache)
+
         return new_obj
 
     @classmethod

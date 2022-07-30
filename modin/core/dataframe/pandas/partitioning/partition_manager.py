@@ -503,7 +503,81 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
 
     @classmethod
     @wait_computations_if_benchmark_mode
-    def lazy_map_partitions(cls, partitions, map_func):
+    def lazy_propagate_index_objs(
+        cls,
+        partitions,
+        map_func,
+        row_lengths=None,
+        column_widths=None,
+        cum_row_lengths=None,
+        cum_col_widths=None,
+    ):
+        """
+        Apply `map_func` to every partition in `partitions` *lazily*.
+
+        Parameters
+        ----------
+        partitions : NumPy 2D array
+            Partitions of Modin Frame.
+        map_func : callable
+            Function to apply.
+
+        Returns
+        -------
+        NumPy array
+            An array of partitions
+        """
+        preprocessed_map_func = cls.preprocess_func(map_func)
+        if cum_row_lengths and cum_col_widths:
+            return np.array(
+                [
+                    [
+                        partitions[i][j].add_to_apply_calls(
+                            preprocessed_map_func,
+                            new_length=row_lengths[i],
+                            new_width=column_widths[j],
+                            idx=cum_row_lengths[i],
+                            cols=cum_col_widths[j],
+                        )
+                        for j in range(len(partitions[i]))
+                    ]
+                    for i in range(len(partitions))
+                ]
+            )
+        elif cum_row_lengths and cum_col_widths is None:
+            return np.array(
+                [
+                    [
+                        partitions[i][j].add_to_apply_calls(
+                            preprocessed_map_func,
+                            new_length=row_lengths[i],
+                            idx=cum_row_lengths[i],
+                        )
+                        for j in range(len(partitions[i]))
+                    ]
+                    for i in range(len(partitions))
+                ]
+            )
+        if cum_row_lengths is None and cum_col_widths:
+            return np.array(
+                [
+                    [
+                        partitions[i][j].add_to_apply_calls(
+                            preprocessed_map_func,
+                            new_width=column_widths[j],
+                            cols=cum_col_widths[j],
+                        )
+                        for j in range(len(partitions[i]))
+                    ]
+                    for i in range(len(partitions))
+                ]
+            )
+
+    @classmethod
+    @wait_computations_if_benchmark_mode
+    def lazy_map_partitions(
+        cls, partitions, map_func, row_lengths=None, column_widths=None
+    ):
         """
         Apply `map_func` to every partition in `partitions` *lazily*.
 
@@ -522,8 +596,17 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
         preprocessed_map_func = cls.preprocess_func(map_func)
         return np.array(
             [
-                [part.add_to_apply_calls(preprocessed_map_func) for part in row]
-                for row in partitions
+                [
+                    partitions[i][j].add_to_apply_calls(
+                        preprocessed_map_func,
+                        new_length=row_lengths[j] if row_lengths is not None else None,
+                        new_width=column_widths[i]
+                        if column_widths is not None
+                        else None,
+                    )
+                    for j in range(len(partitions[i]))
+                ]
+                for i in range(len(partitions))
             ]
         )
 

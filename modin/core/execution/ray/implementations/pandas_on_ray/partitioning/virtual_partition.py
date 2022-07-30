@@ -46,10 +46,20 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
     instance_type = ray.ObjectRef
     axis = None
 
-    def __init__(self, list_of_blocks, get_ip=False, full_axis=True, call_queue=None):
+    def __init__(
+        self,
+        list_of_blocks,
+        get_ip=False,
+        full_axis=True,
+        new_length=None,
+        new_width=None,
+        call_queue=None,
+    ):
         if isinstance(list_of_blocks, PandasOnRayDataframePartition):
             list_of_blocks = [list_of_blocks]
         self.full_axis = full_axis
+        self.new_length = new_length
+        self.new_width = new_width
         self.call_queue = call_queue or []
         # In the simple case, none of the partitions that will compose this
         # partition are themselves virtual partition. The partitions that will
@@ -331,7 +341,7 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
         self.list_of_partitions_to_combine = materialized.list_of_partitions_to_combine
         return materialized
 
-    def mask(self, row_indices, col_indices):
+    def mask(self, row_indices, col_indices, new_length=None, new_width=None):
         """
         Create (synchronously) a mask that extracts the indices provided.
 
@@ -351,7 +361,7 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
         return (
             self.force_materialization()
             .list_of_partitions_to_combine[0]
-            .mask(row_indices, col_indices)
+            .mask(row_indices, col_indices, new_length=new_length, new_width=new_width)
         )
 
     def to_pandas(self):
@@ -416,6 +426,9 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
 
         def drain(df):
             for func, args, kwargs in self.call_queue:
+                func = deserialize(func)
+                args = deserialize(args)
+                kwargs = deserialize(kwargs)
                 df = func(df, *args, **kwargs)
             return df
 
@@ -431,7 +444,9 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
         futures = self.list_of_blocks
         ray.wait(futures, num_returns=len(futures))
 
-    def add_to_apply_calls(self, func, *args, **kwargs):
+    def add_to_apply_calls(
+        self, func, *args, new_length=None, new_width=None, **kwargs
+    ):
         """
         Add a function to the call queue.
 
@@ -457,6 +472,8 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
         return type(self)(
             self.list_of_partitions_to_combine,
             full_axis=self.full_axis,
+            new_length=new_length,
+            new_width=new_width,
             call_queue=self.call_queue + [(func, args, kwargs)],
         )
 

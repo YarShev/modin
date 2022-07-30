@@ -149,7 +149,31 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
 
     @classmethod
     @progress_bar_wrapper
-    def lazy_map_partitions(cls, partitions, map_func):
+    def lazy_propagate_index_objs(
+        cls,
+        partitions,
+        map_func,
+        row_lengths=None,
+        column_widths=None,
+        cum_row_lengths=None,
+        cum_col_widths=None,
+    ):
+        return super(
+            PandasOnRayDataframePartitionManager, cls
+        ).lazy_propagate_index_objs(
+            partitions,
+            map_func,
+            row_lengths=row_lengths,
+            column_widths=column_widths,
+            cum_row_lengths=cum_row_lengths,
+            cum_col_widths=cum_col_widths,
+        )
+
+    @classmethod
+    @progress_bar_wrapper
+    def lazy_map_partitions(
+        cls, partitions, map_func, row_lengths=None, column_widths=None
+    ):
         """
         Apply `map_func` to every partition in `partitions` *lazily*.
 
@@ -166,7 +190,10 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
             A NumPy array of partitions.
         """
         return super(PandasOnRayDataframePartitionManager, cls).lazy_map_partitions(
-            partitions, map_func
+            partitions,
+            map_func,
+            row_lengths=row_lengths,
+            column_widths=column_widths,
         )
 
     @classmethod
