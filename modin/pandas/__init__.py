@@ -16,23 +16,29 @@ import warnings
 
 orig_copy = pandas.MultiIndex.copy
 
-def new_copy(self, names=None, dtype=None, levels=None, codes=None, deep=False, name=None):
+
+def new_copy(
+    self, names=None, dtype=None, levels=None, codes=None, deep=False, name=None
+):
     result = orig_copy(self, names, dtype, levels, codes, deep, name)
     if not deep and levels is None and codes is None:
         result._id = self._id
     return result
 
-pandas.MultiIndex.copy = new_copy
 
+pandas.MultiIndex.copy = new_copy
 
 orig_index_new = pandas.core.indexes.base._new_Index
 
+
 def index_newer(cls, d):
     import pandas
+
     if issubclass(cls, pandas.MultiIndex):
         d["verify_integrity"] = False
 
     return orig_index_new(cls, d)
+
 
 pandas.core.indexes.base._new_Index = index_newer
 

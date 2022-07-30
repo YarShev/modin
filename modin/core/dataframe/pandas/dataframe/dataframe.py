@@ -525,6 +525,11 @@ class PandasDataframe(ClassLogger):
             The axis to apply to. If it's None applies to both axes.
         """
         self._filter_empties()
+
+        if not self._partitions.size:
+            self._partitions = np.array([])
+            return
+
         if axis is None or axis == 0:
             cum_row_lengths = np.cumsum([0] + self._row_lengths)
         if axis is None or axis == 1:
@@ -537,22 +542,19 @@ class PandasDataframe(ClassLogger):
                     cols, axis="columns", inplace=False
                 )
 
-            self._partitions = np.array(
-                [
-                    [
-                        self._partitions[i][j].add_to_apply_calls(
-                            apply_idx_objs,
-                            idx=self.index[
-                                slice(cum_row_lengths[i], cum_row_lengths[i + 1])
-                            ],
-                            cols=self.columns[
-                                slice(cum_col_widths[j], cum_col_widths[j + 1])
-                            ],
-                        )
-                        for j in range(len(self._partitions[i]))
-                    ]
-                    for i in range(len(self._partitions))
-                ]
+            self._partitions = self._partition_mgr_cls.lazy_propagate_index_objs(
+                self._partitions,
+                apply_idx_objs,
+                row_lengths=self._row_lengths,
+                column_widths=self._column_widths,
+                cum_row_lengths=[
+                    self.index[slice(cum_row_lengths[i], cum_row_lengths[i + 1])]
+                    for i in range(len(self._partitions.T[0]))
+                ],
+                cum_col_widths=[
+                    self.columns[slice(cum_col_widths[i], cum_col_widths[i + 1])]
+                    for i in range(len(self._partitions[0]))
+                ],
             )
             self._deferred_index = False
             self._deferred_column = False
@@ -561,19 +563,14 @@ class PandasDataframe(ClassLogger):
             def apply_idx_objs(df, idx):
                 return df.set_axis(idx, axis="index", inplace=False)
 
-            self._partitions = np.array(
-                [
-                    [
-                        self._partitions[i][j].add_to_apply_calls(
-                            apply_idx_objs,
-                            idx=self.index[
-                                slice(cum_row_lengths[i], cum_row_lengths[i + 1])
-                            ],
-                        )
-                        for j in range(len(self._partitions[i]))
-                    ]
-                    for i in range(len(self._partitions))
-                ]
+            self._partitions = self._partition_mgr_cls.lazy_propagate_index_objs(
+                self._partitions,
+                apply_idx_objs,
+                row_lengths=self._row_lengths,
+                cum_row_lengths=[
+                    self.index[slice(cum_row_lengths[i], cum_row_lengths[i + 1])]
+                    for i in range(len(self._partitions.T[0]))
+                ],
             )
             self._deferred_index = False
         elif axis == 1:
@@ -581,19 +578,14 @@ class PandasDataframe(ClassLogger):
             def apply_idx_objs(df, cols):
                 return df.set_axis(cols, axis="columns", inplace=False)
 
-            self._partitions = np.array(
-                [
-                    [
-                        self._partitions[i][j].add_to_apply_calls(
-                            apply_idx_objs,
-                            cols=self.columns[
-                                slice(cum_col_widths[j], cum_col_widths[j + 1])
-                            ],
-                        )
-                        for j in range(len(self._partitions[i]))
-                    ]
-                    for i in range(len(self._partitions))
-                ]
+            self._partitions = self._partition_mgr_cls.lazy_propagate_index_objs(
+                self._partitions,
+                apply_idx_objs,
+                column_widths=self._column_widths,
+                cum_col_widths=[
+                    self.columns[slice(cum_col_widths[i], cum_col_widths[i + 1])]
+                    for i in range(len(self._partitions[0]))
+                ],
             )
             self._deferred_column = False
         else:
@@ -773,13 +765,16 @@ class PandasDataframe(ClassLogger):
             [
                 [
                     self._partitions[row_idx][col_idx].mask(
-                        row_internal_indices, col_internal_indices
+                        row_internal_indices,
+                        col_internal_indices,
+                        new_length=new_row_lengths[i],
+                        new_width=new_col_widths[j],
                     )
-                    for col_idx, col_internal_indices in col_partitions_list.items()
+                    for j, (col_idx, col_internal_indices) in enumerate(col_partitions_list.items())
                     if isinstance(col_internal_indices, slice)
                     or len(col_internal_indices) > 0
                 ]
-                for row_idx, row_internal_indices in row_partitions_list.items()
+                for i, (row_idx, row_internal_indices) in enumerate(row_partitions_list.items())
                 if isinstance(row_internal_indices, slice)
                 or len(row_internal_indices) > 0
             ]
@@ -1049,7 +1044,10 @@ class PandasDataframe(ClassLogger):
             return df.astype({k: v for k, v in col_dtypes.items() if k in df})
 
         new_frame = self._partition_mgr_cls.map_partitions(
-            self._partitions, astype_builder
+            self._partitions,
+            astype_builder,
+            row_lengths=self._row_lengths,
+            column_widths=self._column_widths,
         )
         return self.__constructor__(
             new_frame,
@@ -1555,7 +1553,12 @@ class PandasDataframe(ClassLogger):
         PandasDataframe
             A new dataframe.
         """
-        new_partitions = self._partition_mgr_cls.map_partitions(self._partitions, func)
+        new_partitions = self._partition_mgr_cls.map_partitions(
+            self._partitions,
+            func,
+            row_lengths=self._row_lengths_cache,
+            column_widths=self._column_widths_cache,
+        )
         if dtypes == "copy":
             dtypes = self._dtypes
         elif dtypes is not None:
@@ -1749,7 +1752,12 @@ class PandasDataframe(ClassLogger):
         def map_fn(df):
             return df.rename(index=new_row_labels, columns=new_col_labels, level=level)
 
-        new_parts = self._partition_mgr_cls.map_partitions(self._partitions, map_fn)
+        new_parts = self._partition_mgr_cls.map_partitions(
+            self._partitions,
+            map_fn,
+            row_lengths=self._row_lengths,
+            column_widths=self._column_widths,
+        )
         return self.__constructor__(
             new_parts,
             new_index,
@@ -2559,7 +2567,11 @@ class PandasDataframe(ClassLogger):
             np.array([])
             if len(left_parts) == 0 or len(right_parts[0]) == 0
             else self._partition_mgr_cls.binary_operation(
-                left_parts, op, right_parts[0]
+                left_parts,
+                op,
+                right_parts[0],
+                row_lengths=row_lengths,
+                column_widths=column_widths,
             )
         )
 
@@ -2934,7 +2946,10 @@ class PandasDataframe(ClassLogger):
             New Modin DataFrame.
         """
         new_partitions = self._partition_mgr_cls.lazy_map_partitions(
-            self._partitions, lambda df: df.T
+            self._partitions,
+            lambda df: df.T,
+            row_lengths=self._column_widths,
+            column_widths=self._row_lengths,
         ).T
         if self._dtypes is not None:
             new_dtypes = pandas.Series(
