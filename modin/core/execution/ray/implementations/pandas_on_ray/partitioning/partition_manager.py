@@ -127,7 +127,7 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
 
     @classmethod
     @progress_bar_wrapper
-    def map_partitions(cls, partitions, map_func):
+    def map_partitions(cls, partitions, map_func, row_lengths=None, column_widths=None):
         """
         Apply `map_func` to every partition in `partitions`.
 
@@ -144,12 +144,14 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
             A NumPy array of partitions.
         """
         return super(PandasOnRayDataframePartitionManager, cls).map_partitions(
-            partitions, map_func
+            partitions, map_func, row_lengths=row_lengths, column_widths=column_widths
         )
 
     @classmethod
     @progress_bar_wrapper
-    def lazy_map_partitions(cls, partitions, map_func):
+    def lazy_map_partitions(
+        cls, partitions, map_func, row_lengths=None, column_widths=None
+    ):
         """
         Apply `map_func` to every partition in `partitions` *lazily*.
 
@@ -166,7 +168,10 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
             A NumPy array of partitions.
         """
         return super(PandasOnRayDataframePartitionManager, cls).lazy_map_partitions(
-            partitions, map_func
+            partitions,
+            map_func,
+            row_lengths=row_lengths,
+            column_widths=column_widths,
         )
 
     @classmethod
@@ -392,7 +397,7 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
 
     @classmethod
     @progress_bar_wrapper
-    def binary_operation(cls, left, func, right):
+    def binary_operation(cls, left, func, right, row_lengths=None, column_widths=None):
         """
         Apply a function that requires partitions of two ``PandasOnRayDataframe`` objects.
 
@@ -411,5 +416,5 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
             A NumPy array with new partitions.
         """
         return super(PandasOnRayDataframePartitionManager, cls).binary_operation(
-            left, func, right
+            left, func, right, row_lengths=row_lengths, column_widths=column_widths
         )
