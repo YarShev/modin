@@ -127,7 +127,7 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
 
     @classmethod
     @progress_bar_wrapper
-    def map_partitions(cls, partitions, map_func):
+    def map_partitions(cls, partitions, map_func, row_lengths=None, column_widths=None):
         """
         Apply `map_func` to every partition in `partitions`.
 
@@ -144,7 +144,7 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
             A NumPy array of partitions.
         """
         return super(PandasOnRayDataframePartitionManager, cls).map_partitions(
-            partitions, map_func
+            partitions, map_func, row_lengths=row_lengths, column_widths=column_widths
         )
 
     @classmethod

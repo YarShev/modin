@@ -1047,7 +1047,10 @@ class PandasDataframe(ClassLogger):
             return df.astype({k: v for k, v in col_dtypes.items() if k in df})
 
         new_frame = self._partition_mgr_cls.map_partitions(
-            self._partitions, astype_builder
+            self._partitions,
+            astype_builder,
+            row_lengths=self._row_lengths,
+            column_widths=self._column_widths,
         )
         return self.__constructor__(
             new_frame,
@@ -1553,7 +1556,12 @@ class PandasDataframe(ClassLogger):
         PandasDataframe
             A new dataframe.
         """
-        new_partitions = self._partition_mgr_cls.map_partitions(self._partitions, func)
+        new_partitions = self._partition_mgr_cls.map_partitions(
+            self._partitions,
+            func,
+            row_lengths=self._row_lengths_cache,
+            column_widths=self._column_widths_cache,
+        )
         if dtypes == "copy":
             dtypes = self._dtypes
         elif dtypes is not None:
@@ -1747,7 +1755,12 @@ class PandasDataframe(ClassLogger):
         def map_fn(df):
             return df.rename(index=new_row_labels, columns=new_col_labels, level=level)
 
-        new_parts = self._partition_mgr_cls.map_partitions(self._partitions, map_fn)
+        new_parts = self._partition_mgr_cls.map_partitions(
+            self._partitions,
+            map_fn,
+            row_lengths=self._row_lengths,
+            column_widths=self._column_widths,
+        )
         return self.__constructor__(
             new_parts,
             new_index,

@@ -43,14 +43,25 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
         Call queue that needs to be executed on wrapped ``pandas.DataFrame``.
     """
 
-    def __init__(self, data, length=None, width=None, ip=None, call_queue=None):
+    def __init__(
+        self,
+        data,
+        length=None,
+        width=None,
+        ip=None,
+        call_queue=None,
+        length_cache_set=None,
+        width_cache_set=None,
+    ):
         assert isinstance(data, ObjectIDType)
         self._data = data
         if call_queue is None:
             call_queue = []
         self.call_queue = call_queue
         self._length_cache = length
+        self._length_cache_set = length_cache_set
         self._width_cache = width
+        self._width_cache_set = width_cache_set
         self._ip_cache = ip
         self._identity = uuid.uuid4().hex
 
@@ -81,7 +92,7 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
         logger.debug(f"EXIT::Partition.get::{self._identity}")
         return result
 
-    def apply(self, func, *args, **kwargs):
+    def apply(self, func, *args, new_length=None, new_width=None, **kwargs):
         """
         Apply a function to the object wrapped by this partition.
 
@@ -118,7 +129,14 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
             result, length, width, ip = _apply_func.remote(data, func, *args, **kwargs)
             logger.debug(f"SUBMIT::_apply_func::{self._identity}")
         logger.debug(f"EXIT::Partition.apply::{self._identity}")
-        return PandasOnRayDataframePartition(result, length, width, ip)
+        return PandasOnRayDataframePartition(
+            result,
+            length=new_length or length,
+            width=new_width or width,
+            length_cache_set=new_length,
+            width_cache_set=new_width,
+            ip=ip,
+        )
 
     def add_to_apply_calls(self, func, *args, **kwargs):
         """
@@ -159,8 +177,8 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
             logger.debug(f"SUBMIT::_apply_list_of_funcs::{self._identity}")
             (
                 self._data,
-                self._length_cache,
-                self._width_cache,
+                length_cache,
+                width_cache,
                 self._ip_cache,
             ) = _apply_list_of_funcs.remote(call_queue, data)
         else:
@@ -170,10 +188,15 @@ class PandasOnRayDataframePartition(PandasDataframePartition):
             logger.debug(f"SUBMIT::_apply_func::{self._identity}")
             (
                 self._data,
-                self._length_cache,
-                self._width_cache,
+                length_cache,
+                width_cache,
                 self._ip_cache,
             ) = _apply_func.remote(data, func, *args, **kwargs)
+
+        if self._length_cache_set is None:
+            self._length_cache = length_cache
+        if self._width_cache_set is None:
+            self._width_cache = width_cache
         logger.debug(f"EXIT::Partition.drain_call_queue::{self._identity}")
         self.call_queue = []
 
