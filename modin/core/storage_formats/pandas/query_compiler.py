@@ -3006,6 +3006,7 @@ class PandasQueryCompiler(BaseQueryCompiler):
             apply_indices=agg_func if isinstance(agg_func, dict) else None,
             enumerate_partitions=True,
             new_columns=new_columns,
+            is_groupby=True,
             **(
                 {
                     "__pass_columns_to_partitions__": True,
