@@ -2617,7 +2617,7 @@ class PandasDataframe(ClassLogger):
             left_parts = self._partitions
             right_parts = [o._partitions for o in others]
             new_lengths = self._row_lengths_cache
-            other_widths = [width for o in others for width in o._column_widths_cache]
+            other_widths = [width for o in others for width in o._column_widths]
             if self._column_widths_cache is not None and all(
                 width is not None for width in other_widths
             ):
