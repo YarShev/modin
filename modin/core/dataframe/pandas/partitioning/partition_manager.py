@@ -1263,7 +1263,7 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
 
     @classmethod
     @wait_computations_if_benchmark_mode
-    def binary_operation(cls, left, func, right):
+    def binary_operation(cls, left, func, right, row_lengths=None, column_widths=None):
         """
         Apply a function that requires two ``PandasDataframe`` objects.
 
@@ -1290,6 +1290,12 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
                     part.apply(
                         func,
                         right[row_idx][col_idx]._data,
+                        new_length=row_lengths[row_idx]
+                        if row_lengths is not None
+                        else None,
+                        new_width=column_widths[col_idx]
+                        if column_widths is not None
+                        else None,
                     )
                     for col_idx, part in enumerate(left[row_idx])
                 ]

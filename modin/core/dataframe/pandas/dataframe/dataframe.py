@@ -2541,7 +2541,11 @@ class PandasDataframe(ClassLogger):
             np.array([])
             if len(left_parts) == 0 or len(right_parts[0]) == 0
             else self._partition_mgr_cls.binary_operation(
-                left_parts, op, right_parts[0]
+                left_parts,
+                op,
+                right_parts[0],
+                row_lengths=row_lengths,
+                column_widths=column_widths,
             )
         )
 
