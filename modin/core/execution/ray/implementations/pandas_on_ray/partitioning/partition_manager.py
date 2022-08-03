@@ -93,6 +93,41 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
     _row_partition_class = PandasOnRayDataframeRowPartition
 
     @classmethod
+    def get_indices_async(cls, axis, partitions, index_func=None):
+        """
+        Get the internal indices stored in the partitions.
+
+        Parameters
+        ----------
+        axis : {0, 1}
+            Axis to extract the labels over.
+        partitions : np.ndarray
+            NumPy array with PandasDataframePartition's.
+        index_func : callable, default: None
+            The function to be used to extract the indices.
+
+        Returns
+        -------
+        pandas.Index
+            A pandas Index object.
+        list of pandas.Index
+            The list of internal indices for each partition.
+
+        Notes
+        -----
+        These are the global indices of the object. This is mostly useful
+        when you have deleted rows/columns internally, but do not know
+        which ones were deleted.
+        """
+        if index_func is None:
+            index_func = lambda df: df.axes[axis]  # noqa: E731
+        # ErrorMessage.catch_bugs_and_request_email(not callable(index_func))
+        func = cls.preprocess_func(index_func)
+        target = partitions.T if axis == 0 else partitions
+        lengths = [idx.apply(func)._data for idx in target[0]] if len(target) else []
+        return lengths, lengths
+
+    @classmethod
     def get_objects_from_partitions(cls, partitions):
         """
         Get the objects wrapped by `partitions` in parallel.
