@@ -2412,8 +2412,8 @@ class PandasDataframe(ClassLogger):
             )
         result = self.__constructor__(
             new_partitions,
-            new_index=new_index,
-            new_columns=new_columns,
+            index=new_index,
+            columns=new_columns,
             row_lengths=row_lengths_cache,
             column_widths=column_widths_cache,
             dtypes=dtypes,
@@ -2810,7 +2810,7 @@ class PandasDataframe(ClassLogger):
             axis, self._partitions, by_parts, map_func, reduce_func, apply_indices
         )
         # kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
-        return self.__constructor__(new_partitions, new_index=new_index, new_columns=new_columns)
+        return self.__constructor__(new_partitions, index=new_index, columns=new_columns)
 
     @classmethod
     def from_pandas(cls, df):
