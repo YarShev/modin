@@ -2385,7 +2385,7 @@ class PandasDataframe(ClassLogger):
         # Index objects for new object creation. This is shorter than if..else
         # kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
         row_lengths_cache = None
-        if new_index:
+        if new_index is not None:
             num_splits = len(new_partitions) if axis == 0 else len(new_partitions.T)
             chunk_size = compute_chunksize(
                 new_index,
@@ -2395,7 +2395,7 @@ class PandasDataframe(ClassLogger):
                 len(new_index[i : (i + 1) * chunk_size]) for i in range(num_splits)
             ]
         column_widths_cache = None
-        if new_columns:
+        if new_columns is not None:
             num_splits = len(new_partitions) if axis == 0 else len(new_partitions.T)
             chunk_size = compute_chunksize(
                 new_columns,
@@ -2406,7 +2406,7 @@ class PandasDataframe(ClassLogger):
             ]
         if dtypes == "copy":
             dtypes = self._dtypes
-        elif dtypes is not None and new_columns:
+        elif dtypes is not None and new_columns is not None:
             dtypes = pandas.Series(
                 [np.dtype(dtypes)] * len(new_columns), index=new_columns
             )
@@ -2809,8 +2809,8 @@ class PandasDataframe(ClassLogger):
         new_partitions = self._partition_mgr_cls.groupby_reduce(
             axis, self._partitions, by_parts, map_func, reduce_func, apply_indices
         )
-        kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
-        return self.__constructor__(new_partitions, **kw)
+        # kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
+        return self.__constructor__(new_partitions, new_index=new_index, new_columns=new_columns)
 
     @classmethod
     def from_pandas(cls, df):
