@@ -2388,7 +2388,7 @@ class PandasDataframe(ClassLogger):
         if new_index is not None:
             num_splits = len(new_partitions) if axis == 0 else len(new_partitions.T)
             chunk_size = compute_chunksize(
-                new_index,
+                len(new_index),
                 num_splits,
             )
             row_lengths_cache = [
@@ -2398,7 +2398,7 @@ class PandasDataframe(ClassLogger):
         if new_columns is not None:
             num_splits = len(new_partitions) if axis == 0 else len(new_partitions.T)
             chunk_size = compute_chunksize(
-                new_columns,
+                len(new_columns),
                 num_splits,
             )
             column_widths_cache = [
