@@ -26,6 +26,8 @@ from pandas.core.dtypes.common import is_numeric_dtype, is_list_like
 from pandas._libs.lib import no_default
 from typing import List, Hashable, Optional, Callable, Union, Dict
 
+
+from modin.core.storage_formats.pandas.utils import compute_chunksize
 from modin.core.storage_formats.pandas.query_compiler import PandasQueryCompiler
 from modin.error_message import ErrorMessage
 from modin.core.storage_formats.pandas.parsers import (
@@ -2300,8 +2302,14 @@ class PandasDataframe(ClassLogger):
             keep_remaining,
         )
 
-        kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
-        return self.__constructor__(new_partitions, **kw)
+        # kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
+        return self.__constructor__(
+            new_partitions,
+            index=new_index,
+            columns=new_columns,
+            row_lengths=self._row_lengths,
+            column_widths=self._column_widths,
+        )
 
     @lazy_metadata_decorator(apply_axis="both")
     def broadcast_apply_full_axis(
@@ -2375,14 +2383,41 @@ class PandasDataframe(ClassLogger):
             keep_partitioning=True,
         )
         # Index objects for new object creation. This is shorter than if..else
-        kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
-        if dtypes == "copy":
-            kw["dtypes"] = self._dtypes
-        elif dtypes is not None:
-            kw["dtypes"] = pandas.Series(
-                [np.dtype(dtypes)] * len(kw["columns"]), index=kw["columns"]
+        # kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
+        row_lengths_cache = None
+        if new_index:
+            num_splits = len(new_partitions) if axis == 0 else len(new_partitions.T)
+            chunk_size = compute_chunksize(
+                new_index,
+                num_splits,
             )
-        result = self.__constructor__(new_partitions, **kw)
+            row_lengths_cache = [
+                len(new_index[i : (i + 1) * chunk_size]) for i in range(num_splits)
+            ]
+        column_widths_cache = None
+        if new_columns:
+            num_splits = len(new_partitions) if axis == 0 else len(new_partitions.T)
+            chunk_size = compute_chunksize(
+                new_columns,
+                num_splits,
+            )
+            column_widths_cache = [
+                len(new_index[i : (i + 1) * chunk_size]) for i in range(num_splits)
+            ]
+        if dtypes == "copy":
+            dtypes = self._dtypes
+        elif dtypes is not None and new_columns:
+            dtypes = pandas.Series(
+                [np.dtype(dtypes)] * len(new_columns), index=new_columns
+            )
+        result = self.__constructor__(
+            new_partitions,
+            new_index=new_index,
+            new_columns=new_columns,
+            row_lengths=row_lengths_cache,
+            column_widths=column_widths_cache,
+            dtypes=dtypes,
+        )
         # There is can be case where synchronization is not needed
         if check_axes_sync and new_index is not None:
             result.synchronize_labels(axis=0)
