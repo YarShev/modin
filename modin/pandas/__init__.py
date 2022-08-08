@@ -37,6 +37,30 @@ def index_newer(cls, d):
 pandas.core.indexes.base._new_Index = index_newer
 
 
+orig_mi_append = pandas.MultiIndex.append
+
+def new_append(self, other):
+    import pandas
+    import numpy as np
+
+    if not isinstance(other, list):
+        other = [other]
+
+    if all(isinstance(obj, pandas.MultiIndex) for obj in other):
+        if all(obj.nlevels == self.nlevels for obj in other):
+            if all(all(pandas.core.dtypes.missing.array_equivalent(slev, olev) for slev, olev in zip(self._levels, obj._levels)) for obj in other):
+                objs = [self] + other
+                new_codes = []
+                for i in range(self.nlevels):
+                    lev_codes = np.concatenate([obj.codes[i] for obj in objs])
+                    new_codes.append(lev_codes)
+                mi = pandas.MultiIndex(codes=new_codes, levels=self.levels, names=self.names)
+                return mi
+    return orig_mi_append(self, other)
+
+pandas.MultiIndex.append = new_append
+
+
 from modin._compat import PandasCompatVersion
 
 if PandasCompatVersion.CURRENT == PandasCompatVersion.PY36:
