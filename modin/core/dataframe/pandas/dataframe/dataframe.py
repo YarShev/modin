@@ -534,6 +534,9 @@ class PandasDataframe(ClassLogger):
                     for i in range(len(self._partitions))
                 ]
             )
+            for i in range(len(self._partitions)):
+                for j in range(len(self._partitions[i])):
+                    self._partitions[i][j]._length_cache = self._row_lengths[i]
             self._deferred_index = False
         elif axis == 1:
 
