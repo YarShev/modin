@@ -177,49 +177,87 @@ class PandasDataframe(ClassLogger):
     def __init__(
         self,
         partitions,
-        index,
-        columns,
+        index=None,
+        columns=None,
         row_lengths=None,
         column_widths=None,
         dtypes=None,
     ):
         self._partitions = partitions
-        self._index_cache = ensure_index(index)
-        self._columns_cache = ensure_index(columns)
-        if row_lengths is not None and len(self.index) > 0:
+        # self._index_cache = ensure_index(index)
+        # self._columns_cache = ensure_index(columns)
+        self._row_lengths_cache = row_lengths
+        self._column_widths_cache = column_widths
+        self._dtypes = dtypes
+        self._validate_axes_lengths()
+        self._filter_empties(compute_metadata=False)
+
+    def _validate_axes_lengths(self):
+        """Validate that labels are split correctly if split is known."""
+        if self._row_lengths_cache is not None and len(self.index) > 0:
             # An empty frame can have 0 rows but a nonempty index. If the frame
             # does have rows, the number of rows must equal the size of the
             # index.
-            num_rows = sum(row_lengths)
+            num_rows = sum(self._row_lengths_cache)
             if num_rows > 0:
                 ErrorMessage.catch_bugs_and_request_email(
                     num_rows != len(self._index_cache),
-                    "Row lengths: {} != {}".format(num_rows, len(self._index_cache)),
+                    f"Row lengths: {num_rows} != {len(self._index_cache)}",
                 )
             ErrorMessage.catch_bugs_and_request_email(
-                any(val < 0 for val in row_lengths),
-                "Row lengths cannot be negative: {}".format(row_lengths),
+                any(val < 0 for val in self._row_lengths_cache),
+                f"Row lengths cannot be negative: {self._row_lengths_cache}",
             )
-        self._row_lengths_cache = row_lengths
-        if column_widths is not None and len(self.columns) > 0:
+        if self._column_widths_cache is not None and len(self.columns) > 0:
             # An empty frame can have 0 column but a nonempty column index. If
             # the frame does have columns, the number of columns must equal the
             # size of the columns.
-            num_columns = sum(column_widths)
+            num_columns = sum(self._column_widths_cache)
             if num_columns > 0:
                 ErrorMessage.catch_bugs_and_request_email(
                     num_columns != len(self._columns_cache),
-                    "Column widths: {} != {}".format(
-                        num_columns, len(self._columns_cache)
-                    ),
+                    f"Column widths: {num_columns} != {len(self._columns_cache)}",
                 )
             ErrorMessage.catch_bugs_and_request_email(
-                any(val < 0 for val in column_widths),
-                "Column widths cannot be negative: {}".format(column_widths),
+                any(val < 0 for val in self._column_widths_cache),
+                f"Column widths cannot be negative: {self._column_widths_cache}",
             )
-        self._column_widths_cache = column_widths
-        self._dtypes = dtypes
-        self._filter_empties()
+    
+    def _filter_empties(self, compute_metadata=True):
+        """
+        Remove empty partitions from `self._partitions` to avoid triggering excess computation.
+        Parameters
+        ----------
+        compute_metadata : bool, default: True
+            Trigger the computations for partition sizes and labels if they're not done already.
+        """
+        if not compute_metadata and (
+            self._index_cache is None
+            or self._columns_cache is None
+            or self._row_lengths_cache is None
+            or self._column_widths_cache is None
+        ):
+            # do not trigger the computations
+            return
+        if len(self.axes[0]) == 0 or len(self.axes[1]) == 0:
+            # This is the case for an empty frame. We don't want to completely remove
+            # all metadata and partitions so for the moment, we won't prune if the frame
+            # is empty.
+            # TODO: Handle empty dataframes better
+            return
+        self._partitions = np.array(
+            [
+                [
+                    self._partitions[i][j]
+                    for j in range(len(self._partitions[i]))
+                    if j < len(self._column_widths) and self._column_widths[j] != 0
+                ]
+                for i in range(len(self._partitions))
+                if i < len(self._row_lengths) and self._row_lengths[i] != 0
+            ]
+        )
+        self._column_widths_cache = [w for w in self._column_widths if w != 0]
+        self._row_lengths_cache = [r for r in self._row_lengths if r != 0]
 
     @property
     def _row_lengths(self):
@@ -430,28 +468,6 @@ class PandasDataframe(ClassLogger):
             partitions = self._partitions
         new_index, _ = self._partition_mgr_cls.get_indices(axis, partitions)
         return new_index
-
-    def _filter_empties(self):
-        """Remove empty partitions from `self._partitions` to avoid triggering excess computation."""
-        if len(self.axes[0]) == 0 or len(self.axes[1]) == 0:
-            # This is the case for an empty frame. We don't want to completely remove
-            # all metadata and partitions so for the moment, we won't prune if the frame
-            # is empty.
-            # TODO: Handle empty dataframes better
-            return
-        self._partitions = np.array(
-            [
-                [
-                    self._partitions[i][j]
-                    for j in range(len(self._partitions[i]))
-                    if j < len(self._column_widths) and self._column_widths[j] != 0
-                ]
-                for i in range(len(self._partitions))
-                if i < len(self._row_lengths) and self._row_lengths[i] != 0
-            ]
-        )
-        self._column_widths_cache = [w for w in self._column_widths if w != 0]
-        self._row_lengths_cache = [r for r in self._row_lengths if r != 0]
 
     def synchronize_labels(self, axis=None):
         """
@@ -2772,14 +2788,9 @@ class PandasDataframe(ClassLogger):
         new_partitions = self._partition_mgr_cls.groupby_reduce(
             axis, self._partitions, by_parts, map_func, reduce_func, apply_indices
         )
-        new_axes = [
-            self._compute_axis_labels(i, new_partitions)
-            if new_axis is None
-            else new_axis
-            for i, new_axis in enumerate([new_index, new_columns])
-        ]
+        kw = self._make_init_labels_args(new_partitions, new_index, new_columns)
 
-        return self.__constructor__(new_partitions, *new_axes)
+        return self.__constructor__(new_partitions, **kw)
 
     @classmethod
     def from_pandas(cls, df):

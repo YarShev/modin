@@ -30,6 +30,11 @@ from .partition import PandasOnRayDataframePartition
 from modin.core.execution.ray.generic.modin_aqp import call_progress_bar
 from pandas._libs.lib import no_default
 
+@ray.remote
+def compute_index(func, *partitions):
+    lengths = [func(p) for p in partitions]
+    total_idx = lengths[0].append(lengths[1:]) if lengths else lengths
+    return total_idx, [len(length) for length in lengths]
 
 def progress_bar_wrapper(f):
     """
@@ -91,6 +96,46 @@ class PandasOnRayDataframePartitionManager(GenericRayDataframePartitionManager):
     _partition_class = PandasOnRayDataframePartition
     _column_partitions_class = PandasOnRayDataframeColumnPartition
     _row_partition_class = PandasOnRayDataframeRowPartition
+
+    @classmethod
+    def get_indices_async(cls, axis, partitions, index_func=None):
+        """
+        Get the internal indices stored in the partitions.
+        Parameters
+        ----------
+        axis : {0, 1}
+            Axis to extract the labels over.
+        partitions : np.ndarray
+            NumPy array with PandasDataframePartition's.
+        index_func : callable, default: None
+            The function to be used to extract the indices.
+        Returns
+        -------
+        pandas.Index
+            A pandas Index object.
+        list of pandas.Index
+            The list of internal indices for each partition.
+        Notes
+        -----
+        These are the global indices of the object. This is mostly useful
+        when you have deleted rows/columns internally, but do not know
+        which ones were deleted.
+        """
+        if index_func is None:
+            index_func = lambda df: df.axes[axis]  # noqa: E731
+        # ErrorMessage.catch_bugs_and_request_email(not callable(index_func))
+        func = cls.preprocess_func(index_func)
+        target = partitions.T if axis == 0 else partitions
+        if not len(target):
+            return [], []
+
+        parts = [None] * len(target[0])
+        for i, t in enumerate(target[0]):
+            t.drain_call_queue()
+            parts[i] = t._data
+
+        total_idx, lengths = compute_index.options(num_returns=2).remote(func, *parts)
+        return total_idx, lengths
 
     @classmethod
     def get_objects_from_partitions(cls, partitions):
