@@ -15,6 +15,7 @@
 
 from collections.abc import Container
 import pandas
+from pandas.core.dtypes.common import is_list_like
 
 from .tree_reduce import TreeReduce
 from .default2pandas.groupby import GroupBy
@@ -284,14 +285,12 @@ class GroupByReduce(TreeReduce):
         The same type as `query_compiler`
             QueryCompiler which carries the result of GroupBy aggregation.
         """
-        if (
-            axis != 0
-            or groupby_kwargs.get("level", None) is None
-            and (
-                not (isinstance(by, (type(query_compiler))) or hashable(by))
-                or isinstance(by, pandas.Grouper)
-            )
-        ):
+        is_valid_axis = axis == 0
+        is_valid_index_by = hashable(by) or (
+            is_list_like(by) and all(o in query_compiler.index.names for o in by)
+        )
+        is_valid_by = isinstance(by, type(query_compiler)) or is_valid_index_by
+        if not is_valid_axis or not is_valid_by:
             by = try_cast_to_pandas(by, squeeze=True)
             # Since 'by' may be a 2D query compiler holding columns to group by,
             # to_pandas will also produce a pandas DataFrame containing them.
