@@ -2334,10 +2334,12 @@ class PandasDataframe(ClassLogger):
             for i, new_axis in enumerate([new_index, new_columns])
         ]
         # we can compute lengths and widths when `keep_partitioning=True` and `new_axes` is not none
-        new_row_lengths = self._row_lengths_cache
-        new_column_widths = self._column_widths_cache
-        if new_axes is not None and new_row_lengths is not None and new_column_widths is not None:
+        new_row_lengths = None
+        new_column_widths = None
+        if self._row_lengths_cache is not None and self._column_widths_cache is not None:
             from modin.core.storage_formats.pandas.utils import compute_chunksize
+            new_row_lengths = self._row_lengths_cache
+            new_column_widths = self._column_widths_cache
             if axis == 0:
                 length = compute_chunksize(len(new_axes[0]), len(new_row_lengths))
                 last_length = len(new_axes[0]) % length
