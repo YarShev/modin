@@ -2344,26 +2344,32 @@ class PandasDataframe(ClassLogger):
                 if sum(new_column_widths) != len(new_axes[1]):
                     # previous cache isn't valid
                     new_column_widths = None
-                length = compute_chunksize(len(new_axes[0]), len(new_row_lengths))
-                new_row_lengths = [length] * (len(new_axes[0]) // length)
-                last_length = len(new_axes[0]) % length
-                if last_length != 0:
-                    new_row_lengths = new_row_lengths + [last_length]
+                if not (sum(new_row_lengths) == len(new_axes[0])):
+                    # the case when a axis partition tries to save its partitioning
+                    # `maintain_partitioning` arg
+                    length = compute_chunksize(len(new_axes[0]), len(new_row_lengths))
+                    new_row_lengths = [length] * (len(new_axes[0]) // length)
+                    last_length = len(new_axes[0]) % length
+                    if last_length != 0:
+                        new_row_lengths = new_row_lengths + [last_length]
             elif axis == 1:
                 if sum(new_row_lengths) != len(new_axes[0]):
                     # previous cache isn't valid
                     new_row_lengths = None
-                width = compute_chunksize(len(new_axes[1]), len(new_column_widths))
-                new_column_widths = [width] * (len(new_axes[1]) // width)
-                last_width = len(new_axes[1]) % width
-                if last_width != 0:
-                    new_column_widths = new_column_widths + [last_width]
-                if len(new_column_widths) != len(new_partitions[0]):
-                    # remove empty frames
-                    list_parts = [None] * len(new_partitions)
-                    for idx, row_parts in enumerate(new_partitions):
-                        list_parts[idx] = row_parts[:len(new_column_widths)]
-                    new_partitions = np.array(list_parts)
+                if not (sum(new_column_widths) == len(new_axes[1])):
+                    # the case when a axis partition tries to save its partitioning
+                    # `maintain_partitioning` arg
+                    width = compute_chunksize(len(new_axes[1]), len(new_column_widths))
+                    new_column_widths = [width] * (len(new_axes[1]) // width)
+                    last_width = len(new_axes[1]) % width
+                    if last_width != 0:
+                        new_column_widths = new_column_widths + [last_width]
+                    if len(new_column_widths) != len(new_partitions[0]):
+                        # remove empty frames
+                        list_parts = [None] * len(new_partitions)
+                        for idx, row_parts in enumerate(new_partitions):
+                            list_parts[idx] = row_parts[:len(new_column_widths)]
+                        new_partitions = np.array(list_parts)
 
 
         if dtypes == "copy":
