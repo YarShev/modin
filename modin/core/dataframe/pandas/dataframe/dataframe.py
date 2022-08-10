@@ -2333,6 +2333,20 @@ class PandasDataframe(ClassLogger):
             else new_axis
             for i, new_axis in enumerate([new_index, new_columns])
         ]
+        # we can compute lengths and widths when `keep_partitioning=True` and `new_axes` is not none
+        new_row_lengths = self._row_lengths_cache
+        new_column_widths = self._column_widths_cache
+        if new_axes is not None and new_row_lengths is not None and new_column_widths is not None:
+            from modin.core.storage_formats.pandas.utils import compute_chunksize
+            if axis == 0:
+                length = compute_chunksize(len(new_axes[0]), len(new_row_lengths))
+                last_length = len(new_axes[0]) % length
+                new_row_lengths = [length] * (len(new_axes[0]) // length) + [last_length]
+            elif axis == 1:
+                width = compute_chunksize(len(new_axes[1]), len(new_column_widths))
+                last_width = len(new_axes[1]) % width
+                new_column_widths = [width] * (len(new_axes[1]) // width) + [last_width]
+
         if dtypes == "copy":
             dtypes = self._dtypes
         elif dtypes is not None:
@@ -2342,8 +2356,8 @@ class PandasDataframe(ClassLogger):
         result = self.__constructor__(
             new_partitions,
             *new_axes,
-            None,
-            None,
+            new_row_lengths,
+            new_column_widths,
             dtypes,
         )
         # There is can be case where synchronization is not needed
