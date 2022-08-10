@@ -2785,7 +2785,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
         how="axis_wise",
         drop=False,
     ):
-        if isinstance(agg_func, dict) and all(
+        force_full_axis = agg_kwargs.pop("force_full_axis", False)
+        if not force_full_axis and isinstance(agg_func, dict) and all(
             is_reduce_function(x) for x in agg_func.values()
         ):
             return self._groupby_dict_reduce(
