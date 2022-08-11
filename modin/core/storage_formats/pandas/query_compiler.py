@@ -583,6 +583,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
         def _reindex(df):
             kwargs["copy"] = False
+            nonlocal labels
+            if isinstance(labels, np.ndarray) and labels.dtype != "object":
+                labels = labels.astype("object")
             df = df.reindex(labels=labels, axis=axis, **kwargs)
             if actual_index is not None:
                 df.index = actual_index
