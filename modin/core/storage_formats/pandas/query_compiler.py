@@ -508,6 +508,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
                     if level_name not in on_in_index:
                         index = index.droplevel(level_name)
                 return index
+            if on_in_index.empty and not on_in_columns.empty:
+                # fast path
+                # reindex works well with np.ndarray
+                return query_compiler.getitem_array(on_in_columns).to_pandas().values
             if not on_in_index.empty:
                 frame1 = index.to_frame()[on_in_index]
             if not on_in_columns.empty:
