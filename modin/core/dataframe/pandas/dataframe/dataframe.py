@@ -2386,7 +2386,7 @@ class PandasDataframe(ClassLogger):
                 if sum(new_column_widths) != len(new_axes[1]):
                     # previous cache isn't valid
                     new_column_widths = None
-                if (sum(new_row_lengths) != len(new_axes[0])):
+                if sum(new_row_lengths) != len(new_axes[0]):
                     # the case when an axis partition tries to save its partitioning
                     # `maintain_partitioning` arg
                     length = compute_chunksize(len(new_axes[0]), len(new_row_lengths))
@@ -2398,7 +2398,7 @@ class PandasDataframe(ClassLogger):
                 if sum(new_row_lengths) != len(new_axes[0]):
                     # previous cache isn't valid
                     new_row_lengths = None
-                if not (sum(new_column_widths) == len(new_axes[1])):
+                if sum(new_column_widths) != len(new_axes[1]):
                     # the case when a axis partition tries to save its partitioning
                     # `maintain_partitioning` arg
                     width = compute_chunksize(len(new_axes[1]), len(new_column_widths))
