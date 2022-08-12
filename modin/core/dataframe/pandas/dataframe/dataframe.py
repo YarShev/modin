@@ -976,8 +976,6 @@ class PandasDataframe(ClassLogger):
                     last_width = len(col_idx) % width
                     if last_width != 0:
                         new_column_widths += [last_width]
-                    if len(new_column_widths) != len(ordered_cols.T):
-                        new_column_widths += [0] * (len(ordered_cols.T) - len(new_column_widths))
         else:
             ordered_cols = ordered_rows
             col_idx = self.columns
@@ -2406,9 +2404,6 @@ class PandasDataframe(ClassLogger):
                     last_width = len(new_axes[1]) % width
                     if last_width != 0:
                         new_column_widths += [last_width]
-                    if len(new_column_widths) != len(new_partitions.T):
-                        new_column_widths += [0] * (len(new_partitions.T) - len(new_column_widths))
-
 
         if dtypes == "copy":
             dtypes = self._dtypes
