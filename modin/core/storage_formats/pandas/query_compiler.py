@@ -508,6 +508,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
                     if level_name not in on_in_index:
                         index = index.droplevel(level_name)
                 return index
+            if on_in_index.empty and not on_in_columns.empty:
+                # fast path
+                # reindex works well with np.ndarray
+                return query_compiler.getitem_array(on_in_columns).to_pandas().values
             if not on_in_index.empty:
                 frame1 = index.to_frame()[on_in_index]
             if not on_in_columns.empty:
@@ -579,6 +583,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
         def _reindex(df):
             kwargs["copy"] = False
+            nonlocal labels
+            if isinstance(labels, np.ndarray) and labels.dtype != "object":
+                labels = labels.astype("object")
             df = df.reindex(labels=labels, axis=axis, **kwargs)
             if actual_index is not None:
                 df.index = actual_index
