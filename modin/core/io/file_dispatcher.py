@@ -164,8 +164,13 @@ class FileDispatcher(ClassLogger):
         # unnecessary check for our case; hack for now (#4793)
         # however we can return dtypes explicitly as lengths and widths;
         # in that way we save time that could have been spent deserializing an entire dataframe;
-        if False and hasattr(query_compiler, "dtypes") and any(
-            isinstance(t, kernel_lib.CategoricalDtype) for t in query_compiler.dtypes
+        if (
+            False
+            and hasattr(query_compiler, "dtypes")
+            and any(
+                isinstance(t, kernel_lib.CategoricalDtype)
+                for t in query_compiler.dtypes
+            )
         ):
             dtypes = query_compiler.dtypes
             return query_compiler.astype(
