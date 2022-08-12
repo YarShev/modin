@@ -31,6 +31,7 @@ from modin.error_message import ErrorMessage
 from modin.core.storage_formats.pandas.parsers import (
     find_common_type_cat as find_common_type,
 )
+from modin.core.storage_formats.pandas.utils import compute_chunksize
 from modin.core.dataframe.base.dataframe.dataframe import ModinDataframe
 from modin.core.dataframe.base.dataframe.utils import (
     Axis,
@@ -39,6 +40,7 @@ from modin.core.dataframe.base.dataframe.utils import (
 from modin.pandas.indexing import is_range_like
 from modin.pandas.utils import is_full_grab_slice, check_both_not_none
 from modin.logging import ClassLogger
+from modin.config import NPartitions
 
 
 def lazy_metadata_decorator(apply_axis=None, axis_arg=-1, transpose=False):
@@ -942,14 +944,13 @@ class PandasDataframe(ClassLogger):
             )
             row_idx = self.index[row_positions]
             if self._row_lengths_cache is not None and sum(self._row_lengths_cache) == len(row_idx):
-                from modin.config import NPartitions
-                if NPartitions.get() == len(ordered_rows):
+                n_parts = NPartitions.get()
+                if n_parts == len(ordered_rows):
                     # the case when a axis partition tries to save its partitioning
                     # `maintain_partitioning` arg
                     new_row_lengths = self._row_lengths_cache
                 else:
-                    from modin.core.storage_formats.pandas.utils import compute_chunksize
-                    length = compute_chunksize(row_idx, NPartitions.get())
+                    length = compute_chunksize(row_idx, n_parts)
                     new_row_lengths = [length] * (row_idx // length)
                     last_length = row_idx % length
                     if last_length != 0:
@@ -963,15 +964,14 @@ class PandasDataframe(ClassLogger):
             )
             col_idx = self.columns[col_positions]
             if self._column_widths_cache is not None and sum(self._column_widths_cache) == len(col_idx):
-                from modin.config import NPartitions
-                if NPartitions.get() == len(ordered_rows.T):
+                n_parts = NPartitions.get()
+                if n_parts == len(ordered_rows.T):
                     # we need one more condition since `keep_partitioning==False`
                     # the case when a axis partition tries to save its partitioning
                     # `maintain_partitioning` arg
                     new_column_widths = self._column_widths_cache
                 else:
-                    from modin.core.storage_formats.pandas.utils import compute_chunksize
-                    width = compute_chunksize(len(col_idx), NPartitions.get())
+                    width = compute_chunksize(len(col_idx), n_parts)
                     new_column_widths = [width] * (len(col_idx) // width)
                     last_width = len(col_idx) % width
                     if last_width != 0:
@@ -2380,7 +2380,6 @@ class PandasDataframe(ClassLogger):
         new_row_lengths = None
         new_column_widths = None
         if self._row_lengths_cache is not None and self._column_widths_cache is not None:
-            from modin.core.storage_formats.pandas.utils import compute_chunksize
             new_row_lengths = self._row_lengths_cache
             new_column_widths = self._column_widths_cache
             if axis == 0:
