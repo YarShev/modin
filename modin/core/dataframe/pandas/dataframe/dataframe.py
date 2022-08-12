@@ -2407,12 +2407,8 @@ class PandasDataframe(ClassLogger):
                     last_width = len(new_axes[1]) % width
                     if last_width != 0:
                         new_column_widths = new_column_widths + [last_width]
-                    if len(new_column_widths) != len(new_partitions[0]):
-                        # remove empty frames
-                        list_parts = [None] * len(new_partitions)
-                        for idx, row_parts in enumerate(new_partitions):
-                            list_parts[idx] = row_parts[:len(new_column_widths)]
-                        new_partitions = np.array(list_parts)
+                    if len(new_column_widths) != len(new_partitions.T):
+                        new_column_widths = new_column_widths + [0] * (len(new_partitions.T) - len(new_column_widths))
 
 
         if dtypes == "copy":
