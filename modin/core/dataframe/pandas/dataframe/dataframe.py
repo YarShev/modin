@@ -955,6 +955,8 @@ class PandasDataframe(ClassLogger):
                     last_length = row_idx % length
                     if last_length != 0:
                         new_row_lengths += [last_length]
+                    if len(new_row_lengths) != len(ordered_rows):
+                        new_row_lengths += [0] * (len(ordered_rows) - len(new_row_lengths))
         else:
             ordered_rows = self._partitions
             row_idx = self.index
@@ -976,6 +978,8 @@ class PandasDataframe(ClassLogger):
                     last_width = len(col_idx) % width
                     if last_width != 0:
                         new_column_widths += [last_width]
+                    if len(new_column_widths) != len(ordered_cols.T):
+                        new_column_widths += [0] * (len(ordered_cols.T) - len(new_column_widths))
         else:
             ordered_cols = ordered_rows
             col_idx = self.columns
@@ -2392,6 +2396,8 @@ class PandasDataframe(ClassLogger):
                     last_length = len(new_axes[0]) % length
                     if last_length != 0:
                         new_row_lengths += [last_length]
+                    if len(new_row_lengths) != len(new_partitions):
+                        new_row_lengths += [0] * (len(new_partitions) - len(new_row_lengths))
             elif axis == 1:
                 if sum(new_row_lengths) != len(new_axes[0]):
                     # previous cache isn't valid
@@ -2404,6 +2410,8 @@ class PandasDataframe(ClassLogger):
                     last_width = len(new_axes[1]) % width
                     if last_width != 0:
                         new_column_widths += [last_width]
+                    if len(new_column_widths) != len(new_partitions.T):
+                        new_column_widths += [0] * (len(new_partitions.T) - len(new_column_widths))
 
         if dtypes == "copy":
             dtypes = self._dtypes
