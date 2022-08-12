@@ -954,7 +954,7 @@ class PandasDataframe(ClassLogger):
                     new_row_lengths = [length] * (row_idx // length)
                     last_length = row_idx % length
                     if last_length != 0:
-                        new_row_lengths = new_row_lengths + [last_length]
+                        new_row_lengths += [last_length]
         else:
             ordered_rows = self._partitions
             row_idx = self.index
@@ -2386,14 +2386,14 @@ class PandasDataframe(ClassLogger):
                 if sum(new_column_widths) != len(new_axes[1]):
                     # previous cache isn't valid
                     new_column_widths = None
-                if not (sum(new_row_lengths) == len(new_axes[0])):
-                    # the case when a axis partition tries to save its partitioning
+                if (sum(new_row_lengths) != len(new_axes[0])):
+                    # the case when an axis partition tries to save its partitioning
                     # `maintain_partitioning` arg
                     length = compute_chunksize(len(new_axes[0]), len(new_row_lengths))
                     new_row_lengths = [length] * (len(new_axes[0]) // length)
                     last_length = len(new_axes[0]) % length
                     if last_length != 0:
-                        new_row_lengths = new_row_lengths + [last_length]
+                        new_row_lengths += [last_length]
             elif axis == 1:
                 if sum(new_row_lengths) != len(new_axes[0]):
                     # previous cache isn't valid
