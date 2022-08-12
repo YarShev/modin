@@ -943,7 +943,9 @@ class PandasDataframe(ClassLogger):
                 0, self._partitions, lambda df: df.iloc[row_positions]
             )
             row_idx = self.index[row_positions]
-            if self._row_lengths_cache is not None and sum(self._row_lengths_cache) == len(row_idx):
+            if self._row_lengths_cache is not None and sum(
+                self._row_lengths_cache
+            ) == len(row_idx):
                 n_parts = NPartitions.get()
                 if n_parts == len(ordered_rows):
                     # the case when a axis partition tries to save its partitioning
@@ -956,7 +958,9 @@ class PandasDataframe(ClassLogger):
                     if last_length != 0:
                         new_row_lengths += [last_length]
                     if len(new_row_lengths) != len(ordered_rows):
-                        new_row_lengths += [0] * (len(ordered_rows) - len(new_row_lengths))
+                        new_row_lengths += [0] * (
+                            len(ordered_rows) - len(new_row_lengths)
+                        )
         else:
             ordered_rows = self._partitions
             row_idx = self.index
@@ -965,7 +969,9 @@ class PandasDataframe(ClassLogger):
                 1, ordered_rows, lambda df: df.iloc[:, col_positions]
             )
             col_idx = self.columns[col_positions]
-            if self._column_widths_cache is not None and sum(self._column_widths_cache) == len(col_idx):
+            if self._column_widths_cache is not None and sum(
+                self._column_widths_cache
+            ) == len(col_idx):
                 n_parts = NPartitions.get()
                 if n_parts == len(ordered_rows.T):
                     # we need one more condition since `keep_partitioning==False`
@@ -979,7 +985,9 @@ class PandasDataframe(ClassLogger):
                     if last_width != 0:
                         new_column_widths += [last_width]
                     if len(new_column_widths) != len(ordered_cols.T):
-                        new_column_widths += [0] * (len(ordered_cols.T) - len(new_column_widths))
+                        new_column_widths += [0] * (
+                            len(ordered_cols.T) - len(new_column_widths)
+                        )
         else:
             ordered_cols = ordered_rows
             col_idx = self.columns
@@ -2312,6 +2320,7 @@ class PandasDataframe(ClassLogger):
         enumerate_partitions=False,
         dtypes=None,
         check_axes_sync=True,
+        __pass_columns_to_partitions__=False,
     ):
         """
         Broadcast partitions of `other` Modin DataFrame and apply a function along full axis.
@@ -2345,6 +2354,9 @@ class PandasDataframe(ClassLogger):
             functions, we know in advance that it must match. A good example is the
             `reindex` function. Although synchronization is performed asynchronously,
             it is nevertheless a rather expensive operation.
+        __pass_columns_to_partitions__ : bool, default: False
+            Hacky parameter indicating whether to pass `new_columns` to every partition.
+            May be used for fast labels propagating.
 
         Returns
         -------
@@ -2356,11 +2368,36 @@ class PandasDataframe(ClassLogger):
                 other = [other]
             other = [o._partitions for o in other] if len(other) else None
 
+        new_col_slices = None
         if apply_indices is not None:
-            numeric_indices = self.axes[axis ^ 1].get_indexer_for(apply_indices)
-            apply_indices = self._get_dict_of_block_index(
+            if isinstance(apply_indices, dict):
+                apply_indices_keys = apply_indices.keys()
+            else:
+                apply_indices_keys = apply_indices
+            numeric_indices = self.axes[axis ^ 1].get_indexer_for(apply_indices_keys)
+            partitions_mapping = self._get_dict_of_block_index(
                 axis ^ 1, numeric_indices
-            ).keys()
+            )
+
+            if __pass_columns_to_partitions__:
+                assert isinstance(
+                    apply_indices, dict
+                ), "Information about agg funcs must be provided for fast relabeling"
+                agg_idx = 0
+                agg_keys = list(apply_indices.keys())
+                new_col_slices = [0]
+                for val in partitions_mapping.values():
+                    partition_cols = agg_keys[agg_idx : agg_idx + len(val)]
+                    new_col_slices.append(
+                        sum(
+                            len(apply_indices[col])
+                            if is_list_like(apply_indices[col])
+                            else 1
+                            for col in partition_cols
+                        )
+                    )
+                new_col_slices = np.cumsum(new_col_slices)
+            apply_indices = partitions_mapping.keys()
 
         new_partitions = self._partition_mgr_cls.broadcast_axis_partitions(
             axis=axis,
@@ -2370,6 +2407,14 @@ class PandasDataframe(ClassLogger):
             apply_indices=apply_indices,
             enumerate_partitions=enumerate_partitions,
             keep_partitioning=True,
+            **(
+                {
+                    "new_columns": new_columns,
+                    "internal_indices_for_new_columns": new_col_slices,
+                }
+                if __pass_columns_to_partitions__
+                else {}
+            ),
         )
         # Index objects for new object creation. This is shorter than if..else
         new_axes = [
@@ -2381,7 +2426,10 @@ class PandasDataframe(ClassLogger):
         # we can compute lengths and widths when `keep_partitioning=True` and `new_axes` is not none
         new_row_lengths = None
         new_column_widths = None
-        if self._row_lengths_cache is not None and self._column_widths_cache is not None:
+        if (
+            self._row_lengths_cache is not None
+            and self._column_widths_cache is not None
+        ):
             new_row_lengths = self._row_lengths_cache
             new_column_widths = self._column_widths_cache
             if axis == 0:
@@ -2397,7 +2445,9 @@ class PandasDataframe(ClassLogger):
                     if last_length != 0:
                         new_row_lengths += [last_length]
                     if len(new_row_lengths) != len(new_partitions):
-                        new_row_lengths += [0] * (len(new_partitions) - len(new_row_lengths))
+                        new_row_lengths += [0] * (
+                            len(new_partitions) - len(new_row_lengths)
+                        )
             elif axis == 1:
                 if sum(new_row_lengths) != len(new_axes[0]):
                     # previous cache isn't valid
@@ -2411,7 +2461,9 @@ class PandasDataframe(ClassLogger):
                     if last_width != 0:
                         new_column_widths += [last_width]
                     if len(new_column_widths) != len(new_partitions.T):
-                        new_column_widths += [0] * (len(new_partitions.T) - len(new_column_widths))
+                        new_column_widths += [0] * (
+                            len(new_partitions.T) - len(new_column_widths)
+                        )
 
         if dtypes == "copy":
             dtypes = self._dtypes

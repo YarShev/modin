@@ -14,6 +14,7 @@
 """Module houses builder class for GroupByReduce operator."""
 
 from collections.abc import Container
+from collections import OrderedDict
 import pandas
 from pandas.core.dtypes.common import is_list_like
 
@@ -375,7 +376,9 @@ class GroupByReduce(TreeReduce):
         """
         if not isinstance(agg_func, dict):
             return agg_func
-        partition_dict = {k: v for k, v in agg_func.items() if k in df.columns}
+        partition_dict = OrderedDict(
+            [(k, v) for k, v in agg_func.items() if k in df.columns]
+        )
         return lambda grp: grp.agg(partition_dict)
 
     @classmethod

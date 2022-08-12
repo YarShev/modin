@@ -13,6 +13,7 @@
 
 """Implement GroupBy public API as pandas does."""
 
+from typing import OrderedDict
 import numpy as np
 import pandas
 import pandas.core.groupby
@@ -489,7 +490,9 @@ class DataFrameGroupBy(ClassLogger):
             numeric_only=True,
         )
 
-    def aggregate(self, func=None, force_full_axis=False, *args, **kwargs):
+    def aggregate(
+        self, func=None, force_full_axis=False, fast_relabeling=False, *args, **kwargs
+    ):
         if self._axis != 0:
             # This is not implemented in pandas,
             # so we throw a different message
@@ -513,6 +516,29 @@ class DataFrameGroupBy(ClassLogger):
             relabeling_required, func_dict, new_columns, order = reconstruct_func(
                 func, **kwargs
             )
+            func_dict = OrderedDict(func_dict)
+            if relabeling_required and fast_relabeling:
+                assert (
+                    self._as_index
+                ), "Can't perform fast relabeling with `as_index=False`"
+                # this represents the cols as they presented in the `func_dict`
+                new_columns = pandas.Index(new_columns)[np.argsort(order)]
+
+                cnt = 0
+                label_slices = OrderedDict()
+                for key, value in func_dict.items():
+                    value_len = len(value) if is_list_like(value) else 1
+                    label_slices[key] = (cnt, cnt + value_len)
+                    cnt += value_len
+
+                new_cols = []
+                for col in self._df.columns:
+                    new_labels = label_slices.get(col, None)
+                    if new_labels:
+                        new_cols.extend(new_columns[new_labels[0] : new_labels[1]])
+
+                new_columns = new_cols
+
             func_dict = {col: try_get_str_func(fn) for col, fn in func_dict.items()}
             if any(isinstance(fn, list) for fn in func_dict.values()):
                 # multicolumn case
@@ -569,16 +595,20 @@ class DataFrameGroupBy(ClassLogger):
             if callable(agg_func):
                 return agg_func(*args, **kwargs)
 
+        hacky_kwargs = {"force_full_axis": force_full_axis}
+        if fast_relabeling:
+            hacky_kwargs["new_columns"] = new_columns
+
         result = self._wrap_aggregation(
             qc_method=type(self._query_compiler).groupby_agg,
             numeric_only=False,
             agg_func=func,
             agg_args=args,
-            agg_kwargs={**kwargs, "force_full_axis": force_full_axis},
+            agg_kwargs={**kwargs, **hacky_kwargs},
             how="axis_wise",
         )
 
-        if relabeling_required:
+        if relabeling_required and not fast_relabeling:
             if not self._as_index:
                 nby_cols = len(result.columns) - len(new_columns)
                 order = np.concatenate([np.arange(nby_cols), order + nby_cols])

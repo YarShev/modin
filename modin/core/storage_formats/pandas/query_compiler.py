@@ -2793,6 +2793,7 @@ class PandasQueryCompiler(BaseQueryCompiler):
         drop=False,
     ):
         force_full_axis = agg_kwargs.pop("force_full_axis", False)
+        new_columns = agg_kwargs.pop("new_columns", None)
         if (
             not force_full_axis
             and isinstance(agg_func, dict)
@@ -2801,7 +2802,6 @@ class PandasQueryCompiler(BaseQueryCompiler):
             return self._groupby_dict_reduce(
                 by, agg_func, axis, groupby_kwargs, agg_args, agg_kwargs, drop
             )
-
         if isinstance(agg_func, dict):
             assert (
                 how == "axis_wise"
@@ -2841,7 +2841,19 @@ class PandasQueryCompiler(BaseQueryCompiler):
         broadcastable_by = [o._modin_frame for o in by if isinstance(o, type(self))]
         not_broadcastable_by = [o for o in by if not isinstance(o, type(self))]
 
-        def groupby_agg_builder(df, by=None, drop=False, partition_idx=None):
+        # apply_indices = list(agg_func.keys()) if isinstance(agg_func, dict) else None
+        # partition_label_slices = np.cumsum(
+        #     [0] + [len(agg_func[col]) if is_list_like(agg_func[col]) else 1 for col in apply_indices]
+        # )
+
+        def groupby_agg_builder(
+            df,
+            by=None,
+            drop=False,
+            partition_idx=None,
+            new_columns=None,
+            new_col_slices=None,
+        ):
             """
             Compute groupby aggregation for a single partition.
 
@@ -2906,7 +2918,15 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
             by += not_broadcastable_by
 
-            def compute_groupby(df, drop=False, partition_idx=0):
+            if new_columns is not None and new_col_slices is not None:
+                assert (
+                    partition_idx is not None
+                ), "Partition index is required for fast relabeling"
+                new_columns = new_columns[
+                    new_col_slices[partition_idx] : new_col_slices[partition_idx + 1]
+                ]
+
+            def compute_groupby(df, drop=False, partition_idx=0, new_columns=None):
                 """Compute groupby aggregation for a single partition."""
                 grouped_df = df.groupby(by=by, axis=axis, **groupby_kwargs)
                 try:
@@ -2958,25 +2978,42 @@ class PandasQueryCompiler(BaseQueryCompiler):
                 if len(misaggregated_cols) > 0:
                     result.drop(columns=misaggregated_cols, inplace=True)
 
+                if new_columns is not None:
+                    # print(f"{result.columns=}")
+                    # print(f"{new_columns=}")
+                    result.columns = new_columns
+
                 return result
 
             try:
-                return compute_groupby(df, drop, partition_idx)
+                return compute_groupby(df, drop, partition_idx, new_columns)
             except (ValueError, KeyError):
                 # This will happen with Arrow buffer read-only errors. We don't want to copy
                 # all the time, so this will try to fast-path the code first.
-                return compute_groupby(df.copy(), drop, partition_idx)
-
-        apply_indices = list(agg_func.keys()) if isinstance(agg_func, dict) else None
+                return compute_groupby(df.copy(), drop, partition_idx, new_columns)
 
         new_modin_frame = self._modin_frame.broadcast_apply_full_axis(
             axis=axis,
-            func=lambda df, by=None, partition_idx=None: groupby_agg_builder(
-                df, by, drop, partition_idx
+            func=lambda df, by=None, partition_idx=None, new_columns=None, internal_indices_for_new_columns=None: groupby_agg_builder(
+                df,
+                by,
+                drop,
+                partition_idx,
+                new_columns,
+                internal_indices_for_new_columns,
             ),
             other=broadcastable_by,
-            apply_indices=apply_indices,
+            apply_indices=agg_func if isinstance(agg_func, dict) else None,
             enumerate_partitions=True,
+            new_columns=new_columns,
+            **(
+                {
+                    "__pass_columns_to_partitions__": True,
+                    "check_axes_sync": False,  # we will manually propagate new columns to the partitions
+                }
+                if new_columns is not None
+                else {}
+            ),
         )
         result = self.__constructor__(new_modin_frame)
 
