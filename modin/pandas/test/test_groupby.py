@@ -1439,12 +1439,14 @@ def test_shift_freq(groupby_axis, shift_axis):
         ),
     ],
 )
-@pytest.mark.parametrize("as_index", [True, False])
-def test_agg_func_None_rename(by_and_agg_dict, as_index):
+@pytest.mark.parametrize(
+    "as_index, force_full_axis", [(True, True), (True, False), (False, False)]
+)
+def test_agg_func_None_rename(by_and_agg_dict, as_index, force_full_axis):
     modin_df, pandas_df = create_test_dfs(test_data["int_data"])
 
     modin_result = modin_df.groupby(by_and_agg_dict["by"], as_index=as_index).agg(
-        **by_and_agg_dict["agg_dict"]
+        force_full_axis=force_full_axis, **by_and_agg_dict["agg_dict"]
     )
     pandas_result = pandas_df.groupby(by_and_agg_dict["by"], as_index=as_index).agg(
         **by_and_agg_dict["agg_dict"]
@@ -1734,62 +1736,72 @@ def test_unknown_groupby(columns):
 @pytest.mark.parametrize(
     "func_to_apply",
     [
-        lambda df: df.sum(),
-        lambda df: df.size(),
-        lambda df: df.quantile(),
-        lambda df: df.dtypes,
-        lambda df: df.apply(lambda df: df.sum()),
+        lambda df, force_full_axis: df.sum(),
+        lambda df, force_full_axis: df.size(),
+        lambda df, force_full_axis: df.quantile(),
+        lambda df, force_full_axis: df.dtypes,
+        lambda df, force_full_axis: df.apply(lambda df: df.sum()),
         pytest.param(
-            lambda df: df.apply(lambda df: pandas.Series([1, 2, 3, 4])),
+            lambda df, force_full_axis: df.apply(
+                lambda df: pandas.Series([1, 2, 3, 4])
+            ),
             marks=pytest.mark.skip("See modin issue #2511"),
         ),
-        lambda grp: grp.agg(
+        lambda grp, **kwargs: grp.agg(
             {
                 list(test_data_values[0].keys())[1]: (max, min, sum),
                 list(test_data_values[0].keys())[-2]: (sum, min, max),
-            }
+            },
+            **kwargs,
         ),
-        lambda grp: grp.agg(
+        lambda grp, **kwargs: grp.agg(
             {
                 list(test_data_values[0].keys())[1]: [
                     ("new_sum", "sum"),
                     ("new_min", "min"),
                 ],
                 list(test_data_values[0].keys())[-2]: np.sum,
-            }
+            },
+            **kwargs,
         ),
         pytest.param(
-            lambda grp: grp.agg(
+            lambda grp, **kwargs: grp.agg(
                 {
                     list(test_data_values[0].keys())[1]: (max, min, sum),
                     list(test_data_values[0].keys())[-1]: (sum, min, max),
-                }
+                },
+                **kwargs,
             ),
             id="Agg_and_by_intersection_TreeReduce_implementation",
         ),
         pytest.param(
-            lambda grp: grp.agg(
+            lambda grp, **kwargs: grp.agg(
                 {
                     list(test_data_values[0].keys())[1]: (max, "mean", "nunique"),
                     list(test_data_values[0].keys())[-1]: (sum, min, max),
-                }
+                },
+                **kwargs,
             ),
             id="Agg_and_by_intersection_FullAxis_implementation",
         ),
         pytest.param(
-            lambda grp: grp.agg({list(test_data_values[0].keys())[0]: "count"}),
+            lambda grp, **kwargs: grp.agg(
+                {list(test_data_values[0].keys())[0]: "count"}, **kwargs
+            ),
             id="Agg_and_by_intersection_issue_3376",
         ),
     ],
 )
-@pytest.mark.parametrize("as_index", [True, False])
+@pytest.mark.parametrize(
+    "as_index, force_full_axis", [(True, True), (True, False), (False, False)]
+)
 @pytest.mark.parametrize("by_length", [1, 2])
 @pytest.mark.parametrize(
     "categorical_by",
     [pytest.param(True, marks=pytest.mark.skip("See modin issue #2513")), False],
 )
 def test_multi_column_groupby_different_partitions(
-    func_to_apply, as_index, by_length, categorical_by
+    func_to_apply, as_index, force_full_axis, by_length, categorical_by
 ):
     data = test_data_values[0]
     md_df, pd_df = create_test_dfs(data)
@@ -1804,7 +1816,12 @@ def test_multi_column_groupby_different_partitions(
         md_df.groupby(by, as_index=as_index),
         pd_df.groupby(by, as_index=as_index),
     )
-    eval_general(md_grp, pd_grp, func_to_apply)
+    eval_general(
+        md_grp,
+        pd_grp,
+        func_to_apply,
+        md_extra_kwargs={"force_full_axis": force_full_axis},
+    )
     eval___getitem__(md_grp, pd_grp, md_df.columns[1])
     eval___getitem__(md_grp, pd_grp, [md_df.columns[1], md_df.columns[2]])
 

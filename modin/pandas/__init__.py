@@ -16,28 +16,36 @@ import warnings
 
 orig_copy = pandas.MultiIndex.copy
 
-def new_copy(self, names=None, dtype=None, levels=None, codes=None, deep=False, name=None):
+
+def new_copy(
+    self, names=None, dtype=None, levels=None, codes=None, deep=False, name=None
+):
     result = orig_copy(self, names, dtype, levels, codes, deep, name)
     if not deep and levels is None and codes is None:
         result._id = self._id
     return result
+
 
 pandas.MultiIndex.copy = new_copy
 
 
 orig_index_new = pandas.core.indexes.base._new_Index
 
+
 def index_newer(cls, d):
     import pandas
+
     if issubclass(cls, pandas.MultiIndex):
         d["verify_integrity"] = False
 
     return orig_index_new(cls, d)
 
+
 pandas.core.indexes.base._new_Index = index_newer
 
 
 orig_mi_append = pandas.MultiIndex.append
+
 
 def new_append(self, other):
     import pandas
@@ -48,15 +56,24 @@ def new_append(self, other):
 
     if all(isinstance(obj, pandas.MultiIndex) for obj in other):
         if all(obj.nlevels == self.nlevels for obj in other):
-            if all(all(pandas.core.dtypes.missing.array_equivalent(slev, olev) for slev, olev in zip(self._levels, obj._levels)) for obj in other):
+            if all(
+                all(
+                    pandas.core.dtypes.missing.array_equivalent(slev, olev)
+                    for slev, olev in zip(self._levels, obj._levels)
+                )
+                for obj in other
+            ):
                 objs = [self] + other
                 new_codes = []
                 for i in range(self.nlevels):
                     lev_codes = np.concatenate([obj.codes[i] for obj in objs])
                     new_codes.append(lev_codes)
-                mi = pandas.MultiIndex(codes=new_codes, levels=self.levels, names=self.names)
+                mi = pandas.MultiIndex(
+                    codes=new_codes, levels=self.levels, names=self.names
+                )
                 return mi
     return orig_mi_append(self, other)
+
 
 pandas.MultiIndex.append = new_append
 

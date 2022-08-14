@@ -489,7 +489,7 @@ class DataFrameGroupBy(ClassLogger):
             numeric_only=True,
         )
 
-    def aggregate(self, func=None, *args, **kwargs):
+    def aggregate(self, func=None, force_full_axis=False, *args, **kwargs):
         if self._axis != 0:
             # This is not implemented in pandas,
             # so we throw a different message
@@ -574,7 +574,7 @@ class DataFrameGroupBy(ClassLogger):
             numeric_only=False,
             agg_func=func,
             agg_args=args,
-            agg_kwargs=kwargs,
+            agg_kwargs={**kwargs, "force_full_axis": force_full_axis},
             how="axis_wise",
         )
 
