@@ -22,6 +22,7 @@ from modin.core.dataframe.pandas.partitioning.axis_partition import (
 )
 from modin.core.execution.ray.common.utils import deserialize
 from .partition import PandasOnRayDataframePartition
+from modin.core.storage_formats.pandas.utils import split_result_of_axis_func_pandas
 
 
 class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
@@ -188,7 +189,7 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
             num_returns=(num_splits if lengths is None else len(lengths)) * 4,
             **({"max_retries": max_retries} if max_retries is not None else {}),
         ).remote(
-            PandasDataframeAxisPartition.deploy_axis_func,
+            deploy_axis,
             axis,
             func,
             num_splits,
@@ -235,7 +236,7 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
             A list of ``ray.ObjectRef``-s.
         """
         return deploy_ray_func.options(num_returns=num_splits * 4).remote(
-            PandasDataframeAxisPartition.deploy_func_between_two_axis_partitions,
+            deploy_func_between,
             axis,
             func,
             num_splits,
@@ -553,3 +554,117 @@ def deploy_ray_func(func, *args, **kwargs):  # pragma: no cover
         return [i for r in result for i in [r, len(r), len(r.columns), ip]]
     else:
         return [i for r in result for i in [r, None, None, ip]]
+
+
+def deploy_axis_func(
+    axis, func, num_splits, maintain_partitioning, *partitions, **kwargs
+):
+    """
+    Deploy a function along a full axis.
+
+    Parameters
+    ----------
+    axis : {0, 1}
+        The axis to perform the function along.
+    func : callable
+        The function to perform.
+    num_splits : int
+        The number of splits to return (see `split_result_of_axis_func_pandas`).
+    maintain_partitioning : bool
+        If True, keep the old partitioning if possible.
+        If False, create a new partition layout.
+    *partitions : iterable
+        All partitions that make up the full axis (row or column).
+    **kwargs : dict
+        Additional keywords arguments to be passed in `func`.
+
+    Returns
+    -------
+    list
+        A list of pandas DataFrames.
+    """
+    # Pop these off first because they aren't expected by the function.
+    manual_partition = kwargs.pop("manual_partition", False)
+    lengths = kwargs.pop("_lengths", None)
+
+    dataframe = pandas.concat(list(partitions), axis=axis, copy=False)
+    # To not mix the args for deploy_axis_func and args for func, we fold
+    # args into kwargs. This is a bit of a hack, but it works.
+    result = func(dataframe, *kwargs.pop("args", ()), **kwargs)
+
+    if manual_partition:
+        # The split function is expecting a list
+        lengths = list(lengths)
+    # We set lengths to None so we don't use the old lengths for the resulting partition
+    # layout. This is done if the number of splits is changing or we are told not to
+    # keep the old partitioning.
+    elif num_splits != len(partitions) or not maintain_partitioning:
+        lengths = None
+    else:
+        if axis == 0:
+            lengths = [len(part) for part in partitions]
+            if sum(lengths) != len(result):
+                lengths = None
+        else:
+            lengths = [len(part.columns) for part in partitions]
+            if sum(lengths) != len(result.columns):
+                lengths = None
+    return split_result_of_axis_func_pandas(axis, num_splits, result, lengths)
+
+deploy_axis = ray.put(deploy_axis_func)
+
+def deploy_func_between_two_axis_partitions(
+    axis,
+    func,
+    num_splits,
+    len_of_left,
+    other_shape,
+    *partitions,
+    **kwargs,
+):
+    """
+    Deploy a function along a full axis between two data sets.
+
+    Parameters
+    ----------
+    axis : {0, 1}
+        The axis to perform the function along.
+    func : callable
+        The function to perform.
+    num_splits : int
+        The number of splits to return (see `split_result_of_axis_func_pandas`).
+    len_of_left : int
+        The number of values in `partitions` that belong to the left data set.
+    other_shape : np.ndarray
+        The shape of right frame in terms of partitions, i.e.
+        (other_shape[i-1], other_shape[i]) will indicate slice to restore i-1 axis partition.
+    *partitions : iterable
+        All partitions that make up the full axis (row or column) for both data sets.
+    **kwargs : dict
+        Additional keywords arguments to be passed in `func`.
+
+    Returns
+    -------
+    list
+        A list of pandas DataFrames.
+    """
+    lt_frame = pandas.concat(partitions[:len_of_left], axis=axis, copy=False)
+
+    rt_parts = partitions[len_of_left:]
+
+    # reshaping flattened `rt_parts` array into a frame with shape `other_shape`
+    combined_axis = [
+        pandas.concat(
+            rt_parts[other_shape[i - 1] : other_shape[i]],
+            axis=axis,
+            copy=False,
+        )
+        for i in range(1, len(other_shape))
+    ]
+    rt_frame = pandas.concat(combined_axis, axis=axis ^ 1, copy=False)
+    # To not mix the args for deploy_func_between_two_axis_partitions and args
+    # for func, we fold args into kwargs. This is a bit of a hack, but it works.
+    result = func(lt_frame, rt_frame, *kwargs.pop("args", ()), **kwargs)
+    return split_result_of_axis_func_pandas(axis, num_splits, result)
+
+deploy_func_between = ray.put(deploy_func_between_two_axis_partitions)
