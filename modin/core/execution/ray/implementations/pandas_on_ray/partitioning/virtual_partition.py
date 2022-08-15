@@ -13,6 +13,7 @@
 
 """Module houses classes responsible for storing a virtual partition and applying a function to it."""
 
+import numpy as np
 import pandas
 import ray
 from ray.util import get_node_ip_address
@@ -156,6 +157,8 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
         func,
         num_splits,
         maintain_partitioning,
+        lengths,
+        n_returns,
         *partitions,
         **kwargs,
     ):
@@ -183,10 +186,9 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
         list
             A list of ``ray.ObjectRef``-s.
         """
-        lengths = kwargs.get("_lengths", None)
         max_retries = kwargs.pop("max_retries", None)
         return deploy_ray_func.options(
-            num_returns=(num_splits if lengths is None else len(lengths)) * 4,
+            num_returns=(n_returns if lengths is None else len(lengths)) * 4,
             **({"max_retries": max_retries} if max_retries is not None else {}),
         ).remote(
             deploy_axis,
@@ -206,6 +208,7 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
         num_splits,
         len_of_left,
         other_shape,
+        n_returns,
         *partitions,
         **kwargs,
     ):
@@ -235,7 +238,7 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
         list
             A list of ``ray.ObjectRef``-s.
         """
-        return deploy_ray_func.options(num_returns=num_splits * 4).remote(
+        return deploy_ray_func.options(num_returns=n_returns * 4).remote(
             deploy_func_between,
             axis,
             func,
@@ -268,6 +271,8 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
     def apply(
         self,
         func,
+        lengths,
+        n_returns,
         *args,
         num_splits=None,
         other_axis_partition=None,
@@ -307,16 +312,47 @@ class PandasOnRayDataframeVirtualPartition(PandasDataframeAxisPartition):
             # If this is not a full axis partition, it already contains a subset of
             # the full axis, so we shouldn't split the result further.
             num_splits = 1
+            n_returns = 1
         if len(self.call_queue) > 0:
             self.drain_call_queue()
         kwargs["args"] = args
-        result = super(PandasOnRayDataframeVirtualPartition, self).apply(
-            func,
-            num_splits,
-            other_axis_partition,
-            maintain_partitioning,
-            **kwargs,
-        )
+        
+        if num_splits is None:
+            num_splits = len(self.list_of_blocks)
+
+        if other_axis_partition is not None:
+            if not isinstance(other_axis_partition, list):
+                other_axis_partition = [other_axis_partition]
+
+            # (other_shape[i-1], other_shape[i]) will indicate slice
+            # to restore i-1 axis partition
+            other_shape = np.cumsum(
+                [0] + [len(o.list_of_blocks) for o in other_axis_partition]
+            )
+
+            return self._wrap_partitions(
+                self.deploy_func_between_two_axis_partitions(
+                    self.axis,
+                    func,
+                    num_splits,
+                    len(self.list_of_blocks),
+                    other_shape,
+                    n_returns,
+                    *tuple(
+                        self.list_of_blocks
+                        + [
+                            part
+                            for axis_partition in other_axis_partition
+                            for part in axis_partition.list_of_blocks
+                        ]
+                    ),
+                    **kwargs,
+                )
+            )
+        args = [self.axis, func, num_splits, maintain_partitioning, lengths, n_returns]
+        args.extend(self.list_of_blocks)
+        result = self._wrap_partitions(self.deploy_axis_func(*args, **kwargs))
+
         if self.full_axis:
             return result
         else:
