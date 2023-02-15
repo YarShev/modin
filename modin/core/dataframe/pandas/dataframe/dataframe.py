@@ -2195,6 +2195,7 @@ class PandasDataframe(ClassLogger):
         keep_partitioning=True,
         sync_labels=True,
         pass_axis_lengths_to_partitions=False,
+        apply_treereduce_func=True,
     ):
         """
         Perform a function across an entire axis.
@@ -2230,6 +2231,10 @@ class PandasDataframe(ClassLogger):
         pass_axis_lengths_to_partitions : bool, default: False
             Whether pass partition lengths along `axis ^ 1` to the kernel `func`.
             Note that `func` must be able to obtain `df, *axis_lengths`.
+        apply_treereduce_func : bool, default: True
+            Whether to wrap `func` with `_build_treereduce_func` or not.
+            There are cases when we don't need to do it, e.g., when the query compiler
+            handles the case and has a hint regarding the proper shape of the result.
 
         Returns
         -------
@@ -2252,6 +2257,7 @@ class PandasDataframe(ClassLogger):
             keep_partitioning=keep_partitioning,
             sync_labels=sync_labels,
             pass_axis_lengths_to_partitions=pass_axis_lengths_to_partitions,
+            apply_treereduce_func=apply_treereduce_func,
         )
 
     @lazy_metadata_decorator(apply_axis="both")
@@ -2645,6 +2651,7 @@ class PandasDataframe(ClassLogger):
         keep_partitioning=True,
         sync_labels=True,
         pass_axis_lengths_to_partitions=False,
+        apply_treereduce_func=True,
     ):
         """
         Broadcast partitions of `other` Modin DataFrame and apply a function along full axis.
@@ -2682,6 +2689,10 @@ class PandasDataframe(ClassLogger):
         pass_axis_lengths_to_partitions : bool, default: False
             Whether pass partition lengths along `axis ^ 1` to the kernel `func`.
             Note that `func` must be able to obtain `df, *axis_lengths`.
+        apply_treereduce_func : bool, default: True
+            Whether to wrap `func` with `_build_treereduce_func` or not.
+            There are cases when we don't need to do it, e.g., when the query compiler
+            handles the case and has a hint regarding the proper shape of the result.
 
         Returns
         -------
@@ -2720,7 +2731,9 @@ class PandasDataframe(ClassLogger):
             axis=axis,
             left=self._partitions,
             right=other,
-            apply_func=self._build_treereduce_func(axis, func),
+            apply_func=func,
+            # if apply_treereduce_func
+            # else func,
             apply_indices=apply_indices,
             enumerate_partitions=enumerate_partitions,
             keep_partitioning=keep_partitioning,
