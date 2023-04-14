@@ -2,7 +2,7 @@ name: modin_on_unidist
 channels:
   - conda-forge
 dependencies:
-  - unidist-mpi>=0.2.1
+  # - unidist-mpi>=0.2.1
   - pandas==1.5.3
   - numpy>=1.18.5
   - pyarrow
@@ -48,6 +48,7 @@ dependencies:
   - flake8-print
   - moto
   - pip:
+      - unidist[mpi]@git+https://github.com/YarShev/unidist.git@dev/yigoshev-flags
       # Fixes breaking ipywidgets changes, but didn't release yet.
       - git+https://github.com/modin-project/modin-spreadsheet.git@49ffd89f683f54c311867d602c55443fb11bf2a5
       - connectorx>=0.2.6a4
