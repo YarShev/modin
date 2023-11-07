@@ -1,14 +1,14 @@
-pandas on Unidist
-=================
+pandas on MPI through unidist
+=============================
 
-This section describes usage related documents for the pandas on Unidist component of Modin.
+This section describes usage related documents for the pandas on MPI through unidist component of Modin.
 
 Modin uses pandas as a primary memory format of the underlying partitions and optimizes queries
 ingested from the API layer in a specific way to this format. Thus, there is no need to care of choosing it
 but you can explicitly specify it anyway as shown below.
 
-One of the execution engines that Modin uses is Unidist. Currently, Modin only supports Unidist on MPI backend.
-To enable the pandas on Unidist execution using MPI backend you should set the following environment variables:
+One of the execution engines that Modin uses is MPI through unidist.
+To enable the pandas on MPI through unidist execution you should set the following environment variables:
 
 .. code-block:: bash
 
