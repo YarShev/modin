@@ -348,9 +348,16 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/mamba-env
         with:
+          command: sed -i '/unidist-mpi/d' requirements/env_unidist_linux.yml && sed -i '/mpich/d' requirements/env_unidist_linux.yml
           environment-file: requirements/env_unidist_linux.yml
           activate-environment: modin_on_unidist
           python-version: ${{matrix.python-version}}
+      - name: Install Intel MPI
+        run: mamba install -c intel mpi4py
+      - name: Install unidist from source
+        run: |
+          pip install Cython
+          pip install git+https://github.com/modin-project/unidist
       - name: Install HDF5
         run: sudo apt update && sudo apt install -y libhdf5-dev
       - name: Set up postgres
